@@ -2,17 +2,52 @@ import numpy as np
 import pandas as pd
 
 class CoronaData(object):
+    '''
+    ***************************************************
+    wrapper for reading data from official repositories
+    ***************************************************
+    
+    main functionality:
+    
+    * can iterate over data-object, eg:
+            data = Coronadata()
+            for countryname, countrydata in data:
+                // do stuff
+                // countrydata is pandas-object with time series
+    
+    * access pandas-object directly, eg:
+            data = Coronadata()
+            then 'data.Austria' or 'data.Germany' returns the pandas objects for the respective countries
+            
+            
+    * pandas-object has following columns:
+        Dates
+        Confirmed
+        Recovered
+        Deaths
+    
+    * for countries with multiple provinces (ie US with states), can lump everything together
+      with option 'group_by_country = True' (True by default)
+      if false, generate entries with 'COUNTRY_PROVINCE' with its own pandas-object
+    
+    '''
+    
+    
     def __init__(self,**kwargs):
         
-        self.__datafile  = kwargs.get('datafile','../data/datasets_covid-19/time-series-19-covid-combined.csv')
-        self.__data      = {}
-        
+        self.__datafile            = kwargs.get('datafile','../data/datasets_covid-19/time-series-19-covid-combined.csv')
+        self.__group_by_country    = kwargs.get('group_by_country',True)
+        self.__data                = {}
         self.__maxtrajectorylength = 0
+        
         self.LoadData()
 
-    def LoadData(self, filename = None, group_by_country = True):
+    def LoadData(self, filename = None, group_by_country = None):
         if filename is None:
             filename = self.__datafile
+        if group_by_country is None:
+            group_by_country = self.__group_by_country
+            
         self.__tempalldata = pd.read_csv(filename)
         self.__countrylist = list(set(self.__tempalldata['Country/Region']))
         self.__countrylist.sort()
