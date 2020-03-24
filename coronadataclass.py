@@ -2,8 +2,6 @@ import numpy as np
 import pandas as pd
 import os
 
-from dataflows import Flow, load, unpivot, find_replace, set_type, dump_to_path, update_resource, join, add_computed_field, delete_fields
-
 class CoronaData(object):
     '''
     ***********************************************************
@@ -71,8 +69,8 @@ class CoronaData(object):
         
         for country in self.__countrylist:
             tmp_dates     = np.array(  self.__data_confirmed.columns[5:])
-            tmp_confirmed = np.array(((self.__data_confirmed[self.__data_confirmed['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:]).flatten()
-            tmp_deaths    = np.array(((self.__data_death    [self.__data_death    ['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:]).flatten()
+            tmp_confirmed = np.array(((self.__data_confirmed[self.__data_confirmed['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
+            tmp_deaths    = np.array(((self.__data_death    [self.__data_death    ['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
 
             self.AddCountryData(country, tmp_dates, tmp_confirmed, tmp_deaths)
 
