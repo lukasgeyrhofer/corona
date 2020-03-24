@@ -26,7 +26,6 @@ class CoronaData(object):
     * pandas-object has following columns:
         Dates
         Confirmed
-        Recovered
         Deaths
     
     * for countries with multiple provinces (ie US with states), can lump everything together
@@ -34,7 +33,6 @@ class CoronaData(object):
       if false, generate entries with 'COUNTRY_PROVINCE' with its own pandas-object
     
     * added automatic update of data with official Johns Hopkins University repository (github.com/CSSEGISandData/COVID-19/)
-      with a script found on github.com/datasets/covid-19/
       data is stored locally, such that not every instance of CoronaData class accesses the github data
     
     '''
@@ -42,13 +40,11 @@ class CoronaData(object):
     
     def __init__(self,**kwargs):
 
-        self.BASE_URL = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/'
-        self.CONFIRMED = 'time_series_19-covid-Confirmed.csv'
-        self.DEATH = 'time_series_19-covid-Deaths.csv'
-        self.RECOVERED = 'time_series_19-covid-Recovered.csv'
+        self.BASE_URL  = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/'
+        self.CONFIRMED = 'time_series_covid19_confirmed_global.csv'
+        self.DEATH     = 'time_series_covid19_deaths_global.csv'
 
 
-        
         self.__datafile            = kwargs.get('datafile','time-series-19-covid-combined.csv')
         self.__group_by_country    = kwargs.get('group_by_country',True)
         self.__data                = {}
@@ -60,139 +56,47 @@ class CoronaData(object):
         self.LoadData()
 
 
-
-
-    def LoadData(self, filename = None, group_by_country = None):
-        if filename is None:
-            filename = self.__datafile
-            
+    def LoadData(self, group_by_country = None):
         if group_by_country is None:
             group_by_country = self.__group_by_country
         
-        if not os.path.exists(filename):
-            self.DownloadData(datafile = filename)
+        if not os.path.exists(self.CONFIRMED) or not os.path.exists(self.DEATH):
+            self.DownloadData()
         
-        self.__tempalldata = pd.read_csv(filename)
-        self.__countrylist = list(set(self.__tempalldata['Country/Region']))
+        self.__data_confirmed = pd.read_csv(self.CONFIRMED)
+        self.__data_death     = pd.read_csv(self.DEATH)
+        
+        self.__countrylist = list(self.__data_confirmed['Country/Region'].unique())
         self.__countrylist.sort()
         
         for country in self.__countrylist:
-            tmp_data      = self.__tempalldata[self.__tempalldata['Country/Region'] == country]
-            
-            province_list = list(set(tmp_data['Province/State']))
-            
-            if len(province_list) > 1:
-                if group_by_country:
-                    tmp_data      = tmp_data.groupby('Date').sum()
-                    
-                    tmp_dates     = np.array([d for d in tmp_data.groupby('Date').groups.keys()])
-                    tmp_total     = np.array(tmp_data['Confirmed'], dtype = np.int)
-                    tmp_recovered = np.array(tmp_data['Recovered'], dtype = np.int)
-                    tmp_deaths    = np.array(tmp_data['Deaths'],    dtype = np.int)
+            tmp_dates     = np.array(  self.__data_confirmed.columns[5:])
+            tmp_confirmed = np.array(((self.__data_confirmed[self.__data_confirmed['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:]).flatten()
+            tmp_deaths    = np.array(((self.__data_death    [self.__data_death    ['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:]).flatten()
 
-                    self.AddCountryData(country,tmp_dates, tmp_total, tmp_recovered, tmp_deaths)
-
-                else:
-                    for province in province_list:
-                        tmp_data_prov      = tmp_data[tmp_data['Province/State'] == province]
-                        tmp_dates_prov     = np.array(tmp_data_prov['Date'])
-                        tmp_total_prov     = np.array(tmp_data_prov['Confirmed'], dtype = np.int)
-                        tmp_recovered_prov = np.array(tmp_data_prov['Recovered'], dtype = np.int)
-                        tmp_deaths_prov    = np.array(tmp_data_prov['Deaths'],    dtype = np.int)
-                        
-                        self.AddCountryData(country + '_' + province, tmp_dates_prov, tmp_total_prov, tmp_recovered_prov, tmp_deaths_prov)
-            else:
-                tmp_dates     = np.array(tmp_data['Date'])
-                tmp_total     = np.array(tmp_data['Confirmed'], dtype = np.int)
-                tmp_recovered = np.array(tmp_data['Recovered'], dtype = np.int)
-                tmp_deaths    = np.array(tmp_data['Deaths'],    dtype = np.int)
-                
-                self.AddCountryData(country,tmp_dates, tmp_total, tmp_recovered, tmp_deaths)
+            self.AddCountryData(country, tmp_dates, tmp_confirmed, tmp_deaths)
 
 
-
-
-
-    def AddCountryData(self,countryname, dates, confirmed, recovered, deaths):
-        self.__data[countryname] = pd.DataFrame({ 'Date': dates, 'Confirmed': confirmed, 'Recovered': recovered, 'Deaths': deaths})
+    def AddCountryData(self,countryname, dates, confirmed, deaths):
+        self.__data[countryname] = pd.DataFrame({ 'Date': dates, 'Confirmed': confirmed, 'Deaths': deaths})
         if len(dates) > self.__maxtrajectorylength:
             self.__maxtrajectorylength = len(dates)
 
 
-
-
-
-    def DownloadData(self, datafile = 'time-series-19-covid-combined.csv'):
-        """
-        copied from github.com/datasets/covid-19/process.py
-        """
-        def to_normal_date(row):
-            old_date = row['Date']
-            month, day, year = row['Date'].split('-')
-            day = f'0{day}' if len(day) == 1 else day
-            month = f'0{month}' if len(month) == 1 else month
-            row['Date'] = '-'.join([day, month, year])
-
-        unpivoting_fields = [
-            { 'name': '([0-9]+\/[0-9]+\/[0-9]+)', 'keys': {'Date': r'\1'} }
-        ]
-
-        extra_keys = [{'name': 'Date', 'type': 'string'} ]
-        extra_value = {'name': 'Case', 'type': 'number'}
-
-        Flow(
-            load(f'{self.BASE_URL}{self.CONFIRMED}'),
-            load(f'{self.BASE_URL}{self.RECOVERED}'),
-            load(f'{self.BASE_URL}{self.DEATH}'),
-            unpivot(unpivoting_fields, extra_keys, extra_value),
-            find_replace([{'name': 'Date', 'patterns': [{'find': '/', 'replace': '-'}]}]),
-            to_normal_date,
-            set_type('Date', type='date', format='%d-%m-%y', resources=None),
-            set_type('Case', type='number', resources=None),
-            join(
-                source_name='time_series_19-covid-Confirmed',
-                source_key=['Province/State', 'Country/Region', 'Date'],
-                source_delete=True,
-                target_name='time_series_19-covid-Deaths',
-                target_key=['Province/State', 'Country/Region', 'Date'],
-                fields=dict(Confirmed={
-                    'name': 'Case',
-                    'aggregate': 'first'
-                })
-            ),
-            join(
-                source_name='time_series_19-covid-Recovered',
-                source_key=['Province/State', 'Country/Region', 'Date'],
-                source_delete=True,
-                target_name='time_series_19-covid-Deaths',
-                target_key=['Province/State', 'Country/Region', 'Date'],
-                fields=dict(Recovered={
-                    'name': 'Case',
-                    'aggregate': 'first'
-                })
-            ),
-            add_computed_field(
-                target={'name': 'Deaths', 'type': 'number'},
-                operation='format',
-                with_='{Case}'
-            ),
-            delete_fields(['Case']),
-            update_resource('time_series_19-covid-Deaths', name='time-series-19-covid-combined', path = datafile),
-            dump_to_path()
-        ).results()[0]
-
-
-
-
-
-
-
+    def DownloadData(self):
+        # download data and store locally
+        data_confirmed = pd.read_csv(self.BASE_URL + self.CONFIRMED)
+        data_deaths    = pd.read_csv(self.BASE_URL + self.DEATH)
+        
+        data_confirmed.to_csv(self.CONFIRMED)
+        data_deaths.to_csv(self.DEATH)
+        
 
 
     def __getattr__(self,key):
         if key.lower() == 'countrylist':
             return self.__countrylist
-        elif key in self.__countrylist:
+        elif key.replace('_',' ') in self.__countrylist:
             return self.__data[key]
         else:
             raise KeyError
@@ -205,3 +109,10 @@ class CoronaData(object):
     def __iter__(self):
         for country in self.__countrylist:
             yield country, self.__data[country]
+
+
+
+
+if __name__ == "__main__":
+    # download data when file is called from cli
+    data = CoronaData(download_data = True)
