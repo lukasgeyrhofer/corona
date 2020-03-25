@@ -26,10 +26,6 @@ class CoronaData(object):
         Confirmed
         Deaths
     
-    * for countries with multiple provinces (ie US with states), can lump everything together
-      with option 'group_by_country = True' (True by default)
-      if false, generate entries with 'COUNTRY_PROVINCE' with its own pandas-object
-    
     * added automatic update of data with official Johns Hopkins University repository (github.com/CSSEGISandData/COVID-19/)
       data is stored locally, such that not every instance of CoronaData class accesses the github data
     
@@ -42,9 +38,6 @@ class CoronaData(object):
         self.CONFIRMED = 'time_series_covid19_confirmed_global.csv'
         self.DEATH     = 'time_series_covid19_deaths_global.csv'
 
-
-        self.__datafile            = kwargs.get('datafile','time-series-19-covid-combined.csv')
-        self.__group_by_country    = kwargs.get('group_by_country',True)
         self.__data                = {}
         self.__maxtrajectorylength = 0
         
@@ -54,9 +47,7 @@ class CoronaData(object):
         self.LoadData()
 
 
-    def LoadData(self, group_by_country = None):
-        if group_by_country is None:
-            group_by_country = self.__group_by_country
+    def LoadData(self):
         
         if not os.path.exists(self.CONFIRMED) or not os.path.exists(self.DEATH):
             self.DownloadData()
