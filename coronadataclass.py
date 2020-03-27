@@ -25,6 +25,7 @@ class CoronaData(object):
         Dates
         Confirmed
         Deaths
+        Recovered
     
     * added automatic update of data with official Johns Hopkins University repository (github.com/CSSEGISandData/COVID-19/)
       data is stored locally, such that not every instance of CoronaData class accesses the github data
@@ -37,6 +38,7 @@ class CoronaData(object):
         self.BASE_URL  = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/'
         self.CONFIRMED = 'time_series_covid19_confirmed_global.csv'
         self.DEATH     = 'time_series_covid19_deaths_global.csv'
+        self.RECOVERED = 'time_series_covid19_recovered_global.csv'
 
         self.__data                = {}
         self.__maxtrajectorylength = 0
@@ -49,11 +51,12 @@ class CoronaData(object):
 
     def LoadData(self):
         
-        if not os.path.exists(self.CONFIRMED) or not os.path.exists(self.DEATH):
+        if not os.path.exists(self.CONFIRMED) or not os.path.exists(self.DEATH) or not os.path.exists(self.RECOVERED):
             self.DownloadData()
         
         self.__data_confirmed = pd.read_csv(self.CONFIRMED)
         self.__data_death     = pd.read_csv(self.DEATH)
+        self.__data_recovered = pd.read_csv(self.RECOVERED)
         
         self.__countrylist = list(self.__data_confirmed['Country/Region'].unique())
         self.__countrylist.sort()
@@ -62,12 +65,13 @@ class CoronaData(object):
             tmp_dates     = np.array(  self.__data_confirmed.columns[5:])
             tmp_confirmed = np.array(((self.__data_confirmed[self.__data_confirmed['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
             tmp_deaths    = np.array(((self.__data_death    [self.__data_death    ['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
+            tmp_recovered = np.array(((self.__data_recovered[self.__data_recovered['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
+            
+            self.AddCountryData(country, tmp_dates, tmp_confirmed, tmp_deaths, tmp_recovered)
 
-            self.AddCountryData(country, tmp_dates, tmp_confirmed, tmp_deaths)
 
-
-    def AddCountryData(self,countryname, dates, confirmed, deaths):
-        self.__data[countryname] = pd.DataFrame({ 'Date': dates, 'Confirmed': confirmed, 'Deaths': deaths})
+    def AddCountryData(self,countryname, dates, confirmed, deaths, recovered):
+        self.__data[countryname] = pd.DataFrame({ 'Date': dates, 'Confirmed': confirmed, 'Deaths': deaths, 'Recovered': recovered})
         if len(dates) > self.__maxtrajectorylength:
             self.__maxtrajectorylength = len(dates)
 
@@ -76,9 +80,11 @@ class CoronaData(object):
         # download data and store locally
         data_confirmed = pd.read_csv(self.BASE_URL + self.CONFIRMED)
         data_deaths    = pd.read_csv(self.BASE_URL + self.DEATH)
+        data_recovered = pd.read_csv(self.BASE_URL + self.RECOVERED)
         
         data_confirmed.to_csv(self.CONFIRMED)
         data_deaths.to_csv(self.DEATH)
+        data_recovered.to_csv(self.RECOVERED)
         
 
 
