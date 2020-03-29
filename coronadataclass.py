@@ -87,6 +87,11 @@ class CoronaData(object):
         data_recovered.to_csv(self.RECOVERED)
         
 
+    def CountryData(self, country):
+        if country in self.__countrylist:
+            return self.__data[country]
+        else:
+            return None
 
     def __getattr__(self,key):
         if key.lower() == 'countrylist':
@@ -95,7 +100,7 @@ class CoronaData(object):
             return self.__data[key]
         else:
             raise KeyError
-    
+        
     
     def __len__(self):
         return self.__maxtrajectorylength
