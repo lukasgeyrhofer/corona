@@ -33,7 +33,7 @@ class COVID19_measures(object):
         # set default values of options
         self.__downloaddata       = kwargs.get('download_data',        False )
         self.__measurelevel       = kwargs.get('measure_level',        2     )
-        self.__onlyfirstdates     = kwargs.get('only_first_dates',     True  )
+        self.__onlyfirstdates     = kwargs.get('only_first_dates',     False )
         self.__uniquedates        = kwargs.get('unique_dates',         True  )
         self.__extendmeasurenames = kwargs.get('extend_measure_names', False )
         
