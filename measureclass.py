@@ -84,7 +84,16 @@ class COVID19_measures(object):
                 rdata = tmprdata
                 
             return rdata
+        else:
+            return None
     
+    
+    def __getattr__(self,key):
+        if key in self.__countrylist:
+            return self.GetCountryData(country = key)
+        elif key == 'countrylist':
+            return self.__countrylist
+        
     
     def __iter__(self):
         for country in self.__countrylist:
