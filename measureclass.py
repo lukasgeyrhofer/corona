@@ -35,38 +35,47 @@ class COVID19_measures(object):
         self.ReadData()
     
     
-    def SetMeasureLevel(self, level = 1):
-        self.__measurelevel = level
-    
-    
     def ReadData(self):
         self.__data        = pd.read_csv(self.__datafile,sep = ';')
         self.__countrylist = list(self.__data['Country'].unique())
     
     
-    def GetCountryData(self, country = None, measure_level = 1, only_first_dates = True):
-        cdata = self.__data[self.__data['Country'] == country]
-        groupkey = 'Measure_L{:d}'.format(measure_level)
-        rdata = cdata.groupby(by = groupkey)['Date']
-        if self.__uniquedates:
-            rdata = rdata.apply(set)
-        rdata = dict(rdata.apply(list))
-        if only_first_dates:
-            rdata = dict((k,[min(v)]) for k,v in rdata.items())
-        if (self.__extendmeasurenames) and (measure_level > 1):
-            tmprdata = dict()
-            for k,v in rdata.items():
-                measure_names = []
-                for i in range(1,measure_level):                    
-                    measure_names.append( (cdata[cdata['Measure_L{}'.format(measure_level)] == k])['Measure_L{}'.format(i)].tolist()[0] )
-                measure_names.append(k)
-                tmprdata[' - '.join(measure_names)] = v
-            rdata = tmprdata
-        return rdata
+    def GetCountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
+        if country in self.__countrylist:
+            
+            if measure_level is None:        measure_level        = self.__measurelevel
+            if only_first_dates is None:     only_first_dates     = self.__onlyfirstdates
+            if unique_dates is None:         unique_dates         = self.__uniquedates
+            if extend_measure_names is None: extend_measure_names = self.__extendmeasurenames
+            
+            
+            groupkey = 'Measure_L{:d}'.format(measure_level)
+            cdata    = self.__data[self.__data['Country'] == country]
+            rdata    = cdata.groupby(by = groupkey)['Date']
+
+            if unique_dates:
+                rdata = rdata.apply(set)
+
+            rdata = dict(rdata.apply(list))
+
+            if only_first_dates:
+                rdata = dict((k,[min(v)]) for k,v in rdata.items())
+
+            if extend_measure_names and measure_level > 1:
+                tmprdata = dict()
+                for k,v in rdata.items():
+                    measure_names = []
+                    for i in range(1,measure_level):                    
+                        measure_names.append( (cdata[cdata['Measure_L{}'.format(measure_level)] == k])['Measure_L{}'.format(i)].tolist()[0] )
+                    measure_names.append(k)
+                    tmprdata[' - '.join(measure_names)] = v
+                rdata = tmprdata
+                
+            return rdata
     
     
     def __iter__(self):
         for country in self.__countrylist:
-            yield country,self.GetCountryData(country = country, measure_level = self.__measurelevel, only_first_dates = self.__onlyfirstdates)
+            yield country,self.GetCountryData(country = country)
         
     
