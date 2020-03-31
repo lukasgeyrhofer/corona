@@ -28,7 +28,7 @@ class COVID19_measures(object):
     
     def __init__(self,**kwargs):
         self.DATAFILE             = 'COVID19_non-pharmaceutical-interventions.csv'
-        self.BASEURL              = 'https://github.com/amel-github/covid19-interventionmeasures/blob/master/'
+        self.BASEURL              = 'https://raw.githubusercontent.com/amel-github/covid19-interventionmeasures/master/'
         
         # set default values of options
         self.__downloaddata       = kwargs.get('download_data',        False )
@@ -41,14 +41,14 @@ class COVID19_measures(object):
     
     
     def DownloadData(self):
-        tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ';')
-        tmpdate.to_csv(self.DATAFILE)
+        tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
+        tmpdata.to_csv(self.DATAFILE)
     
     def ReadData(self):
         if not os.path.exists(self.DATAFILE) or self.__downloaddata:
             self.DownloadData()
 
-        self.__data        = pd.read_csv(self.DATAFILE, sep = ';')
+        self.__data        = pd.read_csv(self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
         self.__countrylist = list(self.__data['Country'].unique())
     
     
