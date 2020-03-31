@@ -3,6 +3,27 @@ import pandas as pd
 
 
 class COVID19_measures(object):
+    '''
+    read table of measures from CSV file
+    
+    main usage:
+    
+    data = COVID19_measures(datafile = DATAFILE)
+    
+    for countryname, measuredata in data:
+        // do stuff with measuredata
+    
+    measuredata is dictionary:
+        keys: name of measures 
+        values: list of dates when implemented
+    
+    only return measures that correspond to 'measure_level' = [1 .. 4]
+    if 'only_first_dates == True' only return date of first occurence of measure for this level, otherwise whole list
+    if 'extend_measure_dates == True' keys are changed to include all names of all levels of measures
+    if 'unique_dates == True' remove duplicate days in list of values
+        
+    '''
+    
     def __init__(self,**kwargs):
     
         self.__datafile           = kwargs.get('datafile','../data/COVID19_measures_clean.csv')
