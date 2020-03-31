@@ -4,16 +4,25 @@ import os
 
 class COVID19_measures(object):
     '''
-    read table of measures from CSV file
+    wrapper for COVID19 measures tracked by CSH
+    
+    read table of measures from CSV file,
+    and download data directly from github if not present or forced
     
     main usage:
+
+    **************
     
-    data = COVID19_measures(datafile = DATAFILE)
+        data = COVID19_measures( download_data        = False,
+                                measure_level        = 2,
+                                only_first_dates     = False,
+                                unique_dates         = True,
+                                extend_measure_names = False )
     
-    if datafile not provided, download from CSH github
+        for countryname, measuredata in data:
+            // do stuff with measuredata
     
-    for countryname, measuredata in data:
-        // do stuff with measuredata
+    **************
     
     measuredata is dictionary:
         keys: name of measures 
@@ -36,6 +45,7 @@ class COVID19_measures(object):
         self.__onlyfirstdates     = kwargs.get('only_first_dates',     False )
         self.__uniquedates        = kwargs.get('unique_dates',         True  )
         self.__extendmeasurenames = kwargs.get('extend_measure_names', False )
+        self.__countrycodes       = kwargs.get('country_codes',        False )
         
         self.ReadData()
     
@@ -48,8 +58,9 @@ class COVID19_measures(object):
         if not os.path.exists(self.DATAFILE) or self.__downloaddata:
             self.DownloadData()
 
-        self.__data        = pd.read_csv(self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
-        self.__countrylist = list(self.__data['Country'].unique())
+        self.__data                                = pd.read_csv(self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
+        if self.__countrycodes: self.__countrylist = list(self.__data['iso3c'].unique())
+        else:                   self.__countrylist = list(self.__data['Country'].unique())
     
     
     def GetCountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
@@ -61,9 +72,10 @@ class COVID19_measures(object):
             if extend_measure_names is None: extend_measure_names = self.__extendmeasurenames
             
             
-            groupkey = 'Measure_L{:d}'.format(measure_level)
-            cdata    = self.__data[self.__data['Country'] == country]
-            rdata    = cdata.groupby(by = groupkey)['Date']
+            groupkey                      = 'Measure_L{:d}'.format(measure_level)
+            if self.__countrycodes: cdata = self.__data[self.__data['iso3c']   == country]
+            else:                   cdata = self.__data[self.__data['Country'] == country]
+            rdata                         = cdata.groupby(by = groupkey)['Date']
 
             if unique_dates:
                 rdata = rdata.apply(set)
