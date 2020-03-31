@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-
+import os
 
 class COVID19_measures(object):
     '''
@@ -9,6 +9,8 @@ class COVID19_measures(object):
     main usage:
     
     data = COVID19_measures(datafile = DATAFILE)
+    
+    if datafile not provided, download from CSH github
     
     for countryname, measuredata in data:
         // do stuff with measuredata
@@ -25,18 +27,28 @@ class COVID19_measures(object):
     '''
     
     def __init__(self,**kwargs):
-    
-        self.__datafile           = kwargs.get('datafile','../data/COVID19_measures_clean.csv')
-        self.__measurelevel       = kwargs.get('measure_level',1)
-        self.__onlyfirstdates     = kwargs.get('only_first_dates',True)
-        self.__uniquedates        = kwargs.get('unique_dates',True)
-        self.__extendmeasurenames = kwargs.get('extend_measure_names',False)
+        self.DATAFILE             = 'COVID19_non-pharmaceutical-interventions.csv'
+        self.BASEURL              = 'https://github.com/amel-github/covid19-interventionmeasures/blob/master/'
+        
+        # set default values of options
+        self.__downloaddata       = kwargs.get('download_data',        False )
+        self.__measurelevel       = kwargs.get('measure_level',        2     )
+        self.__onlyfirstdates     = kwargs.get('only_first_dates',     True  )
+        self.__uniquedates        = kwargs.get('unique_dates',         True  )
+        self.__extendmeasurenames = kwargs.get('extend_measure_names', False )
         
         self.ReadData()
     
     
+    def DownloadData(self):
+        tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ';')
+        tmpdate.to_csv(self.DATAFILE)
+    
     def ReadData(self):
-        self.__data        = pd.read_csv(self.__datafile,sep = ';')
+        if not os.path.exists(self.DATAFILE) or self.__downloaddata:
+            self.DownloadData()
+
+        self.__data        = pd.read_csv(self.DATAFILE, sep = ';')
         self.__countrylist = list(self.__data['Country'].unique())
     
     
