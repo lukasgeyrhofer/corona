@@ -63,7 +63,7 @@ class COVID19_measures(object):
         else:                   self.__countrylist = list(self.__data['Country'].unique())
     
     
-    def GetCountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
+    def CountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
         if country in self.__countrylist:
             
             if measure_level is None:        measure_level        = self.__measurelevel
@@ -100,6 +100,14 @@ class COVID19_measures(object):
             return None
     
     
+    def FindMeasure(country, measure_name, measure_level):
+        cd = self.GetCountryData(country, measure_level = measure_level)
+        if measure_name in cd.keys():
+            return cd[measure_name][0]
+        else:
+            return None
+    
+    
     def __getattr__(self,key):
         if key in self.__countrylist:
             return self.GetCountryData(country = key)
@@ -109,6 +117,6 @@ class COVID19_measures(object):
     
     def __iter__(self):
         for country in self.__countrylist:
-            yield country,self.GetCountryData(country = country)
+            yield country,self.CountryData(country = country)
         
     
