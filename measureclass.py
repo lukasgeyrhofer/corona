@@ -100,8 +100,8 @@ class COVID19_measures(object):
             return None
     
     
-    def FindMeasure(country, measure_name, measure_level):
-        cd = self.GetCountryData(country, measure_level = measure_level)
+    def FindMeasure(self, country, measure_name, measure_level):
+        cd = self.CountryData(country, measure_level = measure_level)
         if measure_name in cd.keys():
             return cd[measure_name][0]
         else:
