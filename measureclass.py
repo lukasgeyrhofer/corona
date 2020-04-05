@@ -47,6 +47,11 @@ class COVID19_measures(object):
         self.__extendmeasurenames = kwargs.get('extend_measure_names', False )
         self.__countrycodes       = kwargs.get('country_codes',        False )
         
+        if self.__countrycodes:
+            self.__countrycolumn  = 'iso3c'
+        else:
+            self.__countrycolumn  = 'Country'
+        
         self.ReadData()
     
     
@@ -54,13 +59,13 @@ class COVID19_measures(object):
         tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
         tmpdata.to_csv(self.DATAFILE)
     
+    
     def ReadData(self):
         if not os.path.exists(self.DATAFILE) or self.__downloaddata:
             self.DownloadData()
 
         self.__data                                = pd.read_csv(self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
-        if self.__countrycodes: self.__countrylist = list(self.__data['iso3c'].unique())
-        else:                   self.__countrylist = list(self.__data['Country'].unique())
+        self.__countrylist = list(self.__data[self.__countrycolumn].unique())
     
     
     def CountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
@@ -72,10 +77,10 @@ class COVID19_measures(object):
             if extend_measure_names is None: extend_measure_names = self.__extendmeasurenames
             
             
-            groupkey                      = 'Measure_L{:d}'.format(measure_level)
-            if self.__countrycodes: cdata = self.__data[self.__data['iso3c']   == country]
-            else:                   cdata = self.__data[self.__data['Country'] == country]
-            rdata                         = cdata.groupby(by = groupkey)['Date']
+            groupkey = 'Measure_L{:d}'.format(measure_level)
+            cdata    = self.__data[self.__data[self.__countrycolumn]   == country]
+            cdata    = cdata[cdata['Date'].notna()] # drop all entries which don't have date associated
+            rdata    = cdata.groupby(by = groupkey)['Date']
 
             if unique_dates:
                 rdata = rdata.apply(set)
@@ -98,6 +103,11 @@ class COVID19_measures(object):
             return rdata
         else:
             return None
+    
+    
+    def RawData(self,country):
+        if country in self.__countrylist:
+                return self.__data[self.__data[self.__countrycolumn] == country].reset_index()
     
     
     def FindMeasure(self, country, measure_name, measure_level):
