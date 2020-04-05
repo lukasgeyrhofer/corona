@@ -85,7 +85,7 @@ class COVID19_measures(object):
             if extend_measure_names:
                 countrydata['MN'] = countrydata[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]].agg(' - '.join, axis = 1)
             else:
-                countrydata['MN'] = countrydata['Measure_L{:d}'.format(measure_level)][:]
+                countrydata['MN'] = countrydata['Measure_L{:d}'.format(measure_level)]
             countrydata           = countrydata[countrydata['Date'].notna()] # drop all entries which don't have date associated
             mgdata                = countrydata.groupby(by = 'MN')['Date']
             if unique_dates:
