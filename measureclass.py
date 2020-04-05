@@ -76,31 +76,25 @@ class COVID19_measures(object):
             if unique_dates is None:         unique_dates         = self.__uniquedates
             if extend_measure_names is None: extend_measure_names = self.__extendmeasurenames
             
-            
-            groupkey = 'Measure_L{:d}'.format(measure_level)
-            cdata    = self.__data[self.__data[self.__countrycolumn]   == country]
-            cdata    = cdata[cdata['Date'].notna()] # drop all entries which don't have date associated
-            rdata    = cdata.groupby(by = groupkey)['Date']
-
-            if unique_dates:
-                rdata = rdata.apply(set)
-
-            rdata = dict(rdata.apply(list))
-
-            if only_first_dates:
-                rdata = dict((k,[min(v)]) for k,v in rdata.items())
-
-            if extend_measure_names and measure_level > 1:
-                tmprdata = dict()
-                for k,v in rdata.items():
-                    measure_names = []
-                    for i in range(1,measure_level):                    
-                        measure_names.append( (cdata[cdata['Measure_L{}'.format(measure_level)] == k])['Measure_L{}'.format(i)].tolist()[0] )
-                    measure_names.append(k)
-                    tmprdata[' - '.join(measure_names)] = v
-                rdata = tmprdata
                 
-            return rdata
+            
+            countrydata           = self.__data[self.__data[self.__countrycolumn] == country]
+            if measure_level >= 2:
+                for ml in range(2,measure_level+1):
+                    countrydata['Measure_L{:d}'.format(ml)] = countrydata['Measure_L{:d}'.format(ml)].fillna(countrydata['Measure_L{:d}'.format(ml-1)])
+            if extend_measure_names:
+                countrydata['MN'] = countrydata[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]].agg(' - '.join, axis = 1)
+            else:
+                countrydata['MN'] = countrydata['Measure_L{:d}'.format(measure_level)][:]
+            countrydata           = countrydata[countrydata['Date'].notna()] # drop all entries which don't have date associated
+            mgdata                = countrydata.groupby(by = 'MN')['Date']
+            if unique_dates:
+                mgdata            = mgdata.apply(set)
+            mgdata                = dict((k.strip(),v) for k,v in dict(mgdata.apply(list)).items())
+            if only_first_dates:
+                mgdata            = dict((k,[min(v)]) for k,v in mgdata.items())
+                
+            return mgdata
         else:
             return None
     
