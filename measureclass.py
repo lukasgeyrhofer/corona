@@ -4,25 +4,33 @@ import os
 
 class COVID19_measures(object):
     '''
-    wrapper for COVID19 measures tracked by CSH
+    ***************************************************
+    **  wrapper for COVID19 measures tracked by CSH  **
+    **  github.com/lukasgeyrhofer/corona/            **
+    ***************************************************
+
+    
+    data can be found at
+    https://github.com/amel-github/covid19-interventionmeasures
+    compiled by Desvars-Larrive et al (2020)
     
     read table of measures from CSV file,
-    and download data directly from github if not present or forced
+    and download data from github if not present or forced
     
     main usage:
-
-    **************
+    ( with default options )
+    ***************************************************
     
         data = COVID19_measures( download_data        = False,
-                                measure_level        = 2,
-                                only_first_dates     = False,
-                                unique_dates         = True,
-                                extend_measure_names = False )
+                                 measure_level        = 2,
+                                 only_first_dates     = False,
+                                 unique_dates         = True,
+                                 extend_measure_names = False )
     
         for countryname, measuredata in data:
             // do stuff with measuredata
     
-    **************
+    ***************************************************
     
     measuredata is dictionary:
         keys: name of measures 
@@ -32,7 +40,8 @@ class COVID19_measures(object):
     if 'only_first_dates == True' only return date of first occurence of measure for this level, otherwise whole list
     if 'extend_measure_dates == True' keys are changed to include all names of all levels of measures
     if 'unique_dates == True' remove duplicate days in list of values
-        
+
+    ***************************************************        
     '''
     
     def __init__(self,**kwargs):
@@ -47,6 +56,8 @@ class COVID19_measures(object):
         self.__extendmeasurenames = kwargs.get('extend_measure_names', False )
         self.__countrycodes       = kwargs.get('country_codes',        False )
         
+        # can switch internal declaration of countries completely to the ISO3C countrycodes
+        # no full names of countries can be used then
         if self.__countrycodes:
             self.__countrycolumn  = 'iso3c'
         else:
@@ -64,7 +75,7 @@ class COVID19_measures(object):
         if not os.path.exists(self.DATAFILE) or self.__downloaddata:
             self.DownloadData()
 
-        self.__data                                = pd.read_csv(self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
+        self.__data        = pd.read_csv(self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
         self.__countrylist = list(self.__data[self.__countrycolumn].unique())
     
     
@@ -76,20 +87,26 @@ class COVID19_measures(object):
             if unique_dates is None:         unique_dates         = self.__uniquedates
             if extend_measure_names is None: extend_measure_names = self.__extendmeasurenames
             
-                
-            
             countrydata           = self.__data[self.__data[self.__countrycolumn] == country]
             if measure_level >= 2:
                 for ml in range(2,measure_level+1):
+                    # fill columns with previous measure levels, if empty (otherwise the empty fields generate errors)
                     countrydata['Measure_L{:d}'.format(ml)] = countrydata['Measure_L{:d}'.format(ml)].fillna(countrydata['Measure_L{:d}'.format(ml-1)])
+            
+            # make new column, which will be grouped below
             if extend_measure_names:
                 countrydata['MN'] = countrydata[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]].agg(' - '.join, axis = 1)
             else:
                 countrydata['MN'] = countrydata['Measure_L{:d}'.format(measure_level)]
-            countrydata           = countrydata[countrydata['Date'].notna()] # drop all entries which don't have date associated
+            
+            # drop all entries which don't have date associated
+            countrydata           = countrydata[countrydata['Date'].notna()]
             mgdata                = countrydata.groupby(by = 'MN')['Date']
+            
             if unique_dates:
                 mgdata            = mgdata.apply(set)
+            
+            # rebuild as dict
             mgdata                = dict((k.strip(),v) for k,v in dict(mgdata.apply(list)).items())
             if only_first_dates:
                 mgdata            = dict((k,[min(v)]) for k,v in mgdata.items())
