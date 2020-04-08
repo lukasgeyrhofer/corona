@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+import datetime
 
 class COVID19_measures(object):
     '''
@@ -120,7 +121,35 @@ class COVID19_measures(object):
         if country in self.__countrylist:
                 return self.__data[self.__data[self.__countrycolumn] == country].reset_index()
     
-    
+
+    def date2vector(self, implementdate, start = '22/1/20', end = None, shiftdays = 0):
+        # generate vector of 0s and 1s when measure is implemented or not
+        starttime     = datetime.datetime.strptime(start,         '%d/%m/%y')
+        if end is None:
+            endtime   = datetime.datetime.today()
+        else:
+            endtime   = datetime.datetime.strptime(end,           '%d/%m/%y')
+        implementtime = datetime.datetime.strptime(implementdate, '%d/%m/%Y')
+        
+        totaldays   = (endtime       - starttime).days
+        measuredays = (implementtime - starttime).days
+        
+        vec         = np.zeros(totaldays)
+        vec[min(measuredays+shiftdays,len(vec)-1):] = 1
+        
+        return vec
+
+
+    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/20', enddate = None, shiftdays = 0):
+        if country in self.__countrylist:
+            countrydata = self.CountryData(country = country, measure_level = measure_level, only_first_dates = True)
+            print(countrydata)
+            return pd.DataFrame(    { measurename:self.date2vector(implemented[0], start = startdate, end = enddate, shiftdays = shiftdays)
+                                        for measurename, implemented in countrydata.items()
+                                    } )
+        else:
+            return None
+        
     def FindMeasure(self, country, measure_name, measure_level):
         cd = self.CountryData(country, measure_level = measure_level)
         if measure_name in cd.keys():
