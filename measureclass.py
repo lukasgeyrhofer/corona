@@ -13,7 +13,7 @@ class COVID19_measures(object):
     
     data can be found at
     https://github.com/amel-github/covid19-interventionmeasures
-    compiled by Desvars-Larrive et al (2020)
+    compiled by Desvars-Larrive et al (2020), CC-BY-SA 4.0
     
     read table of measures from CSV file,
     and download data from github if not present or forced
