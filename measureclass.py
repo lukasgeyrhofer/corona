@@ -152,24 +152,19 @@ class COVID19_measures(object):
     
     
     def MeasureList(self, countrylist = None, measure_level = None, mincount = None, extend_measure_names = None):
-        if extend_measure_names is None:    extend_measure_neames = self.
-        if countrylist is None:
-            countrylist = measure_data.countrylist # use ALL countries
-        
+        if extend_measure_names is None:    extend_measure_neames = self.__extendmeasurenames
+        if countrylist is None:             countrylist = self.__countrylist # use ALL countries
         measurelist = {}
-        
         # get all restrictions from countries
         for country in countrylist:
-            country_measures = measure_data.CountryData(country, measure_level = 2, extend_measure_names = extend_measure_names)
+            country_measures = self.CountryData(country, measure_level = measure_level, extend_measure_names = extend_measure_names)
             for measurename, initialdata in country_measures.items():
                 if not measurename in measurelist.keys():
                     measurelist[measurename] = 0
                 measurelist[measurename] += 1
-        
         if not mincount is None:
             # rebuild dict with restrictions
             measurelist = {k:v for k,v in measurelist.items() if v >= mincount}
-
         return measurelist
     
     
