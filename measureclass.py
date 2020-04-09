@@ -134,7 +134,7 @@ class COVID19_measures(object):
                 return self.__data[self.__data[self.__countrycolumn] == country].reset_index()
     
 
-    def date2vector(self, implementdate, start = '22/1/20', end = None, shiftdays = 0):
+    def date2vector(self, implementdate, start = '22/1/20', end = None, shiftdays = 0, maxlen = None):
         # generate vector of 0s and 1s when measure is implemented or not
         starttime     = datetime.datetime.strptime(start,         '%d/%m/%y')
         if end is None:
@@ -149,14 +149,21 @@ class COVID19_measures(object):
         vec         = np.zeros(totaldays)
         vec[min(measuredays+shiftdays,len(vec)-1):] = 1
         
+        if not maxlen is None:
+            vec     = vec[:min(maxlen,len(vec))]
+        
         return vec
 
 
-    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/20', enddate = None, shiftdays = 0):
+    def CleanUpMeasureName(self, measurename = '', clean_up = True):
+        if clean_up:    return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('-','').split(' ')])
+        else:           return measurename
+
+    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/20', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = False):
         if country in self.__countrylist:
             countrydata = self.CountryData(country = country, measure_level = measure_level, only_first_dates = True)
-            print(countrydata)
-            return pd.DataFrame(    { measurename:self.date2vector(implemented[0], start = startdate, end = enddate, shiftdays = shiftdays)
+            return pd.DataFrame(    {   self.CleanUpMeasureName(measurename, clean_up = clean_measurename):
+                                        self.date2vector(implemented[0], start = startdate, end = enddate, shiftdays = shiftdays, maxlen = maxlen)
                                         for measurename, implemented in countrydata.items()
                                     } )
         else:
