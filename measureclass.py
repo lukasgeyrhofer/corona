@@ -56,16 +56,14 @@ class COVID19_measures(object):
         self.__uniquedates        = kwargs.get('unique_dates',         True  )
         self.__extendmeasurenames = kwargs.get('extend_measure_names', False )
         self.__countrycodes       = kwargs.get('country_codes',        False )
+        self.__removedcountries   = []
         
         # can switch internal declaration of countries completely to the ISO3C countrycodes
         # no full names of countries can be used then
-        if self.__countrycodes:
-            self.__countrycolumn  = 'iso3c'
-        else:
-            self.__countrycolumn  = 'Country'
+        if self.__countrycodes:     self.__countrycolumn  = 'iso3c'
+        else:                       self.__countrycolumn  = 'Country'
         
         self.ReadData()
-    
     
     def DownloadData(self):
         tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
@@ -78,6 +76,20 @@ class COVID19_measures(object):
 
         self.__data        = pd.read_csv(self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
         self.__countrylist = list(self.__data[self.__countrycolumn].unique())
+    
+    
+    def RemoveCountry(self, country = None):
+        if country in self.__countrylist:
+            self.__removedcountries.append(country)
+            self.__countrylist.remove(country)
+    
+    
+    def RenameCountry(self, country = None, newname = None):
+        if country in self.__countrylist:
+            self.__countrylist.remove(country)
+            self.__countrylist.append(newname)
+            self.__countrylist.sort()
+            self.__data.replace(to_replace = country, value = newname, inplace = True)
     
     
     def CountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
