@@ -159,6 +159,7 @@ class COVID19_measures(object):
         if clean_up:    return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('-','').split(' ')])
         else:           return measurename
 
+
     def ImplementationTable(self, country, measure_level = None, startdate = '22/1/20', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = False):
         if country in self.__countrylist:
             countrydata = self.CountryData(country = country, measure_level = measure_level, only_first_dates = True)
