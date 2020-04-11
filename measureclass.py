@@ -104,13 +104,13 @@ class COVID19_measures(object):
             if measure_level >= 2:
                 for ml in range(2,measure_level+1):
                     # fill columns with previous measure levels, if empty (otherwise the empty fields generate errors)
-                    countrydata['Measure_L{:d}'.format(ml)] = countrydata['Measure_L{:d}'.format(ml)].fillna(countrydata['Measure_L{:d}'.format(ml-1)])
+                    countrydata.loc[:,'Measure_L{:d}'.format(ml)] = countrydata['Measure_L{:d}'.format(ml)].fillna(countrydata['Measure_L{:d}'.format(ml-1)])
             
             # make new column, which will be grouped below
             if extend_measure_names:
-                countrydata['MN'] = countrydata[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]].agg(' - '.join, axis = 1)
+                countrydata.insert(1, 'MN', np.array(countrydata[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]].agg(' - '.join, axis = 1)), True)
             else:
-                countrydata['MN'] = countrydata['Measure_L{:d}'.format(measure_level)]
+                countrydata.insert(1, 'MN',np.array(countrydata['Measure_L{:d}'.format(measure_level)]), True)
             
             # drop all entries which don't have date associated
             countrydata           = countrydata[countrydata['Date'].notna()]
