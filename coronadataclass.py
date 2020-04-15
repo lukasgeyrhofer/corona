@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+import datetime
 
 class CoronaData(object):
     '''
@@ -85,7 +86,13 @@ class CoronaData(object):
         data_confirmed.to_csv(self.CONFIRMED)
         data_deaths.to_csv(self.DEATH)
         data_recovered.to_csv(self.RECOVERED)
-        
+    
+    def DateAtCases(self, country, cases = 1, column = 'Confirmed', outputformat = '%d%m%Y'):
+        cd = self.CountryData(country)
+        index = np.argmin(cd[column] <= cases)
+        casetime = datetime.datetime.strptime('22/1/2020','%d/%m/%Y') + datetime.timedelta(days = index)
+        return datetime.datetime.strftime(casetime,outputformat)
+
 
     def CountryData(self, country):
         if country in self.__countrylist:

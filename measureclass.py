@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import os
 import datetime
+import re
 
 class COVID19_measures(object):
     '''
@@ -10,11 +11,16 @@ class COVID19_measures(object):
     **  github.com/lukasgeyrhofer/corona/            **
     ***************************************************
 
+    two sources for implemented measures possible:
     
-    data can be found at
-    https://github.com/amel-github/covid19-interventionmeasures
-    compiled by Desvars-Larrive et al (2020), CC-BY-SA 4.0
-    
+    * CSH
+       https://github.com/amel-github/covid19-interventionmeasures
+       compiled by Desvars-Larrive et al (2020), CC-BY-SA 4.0
+    * Oxford
+       https://www.bsg.ox.ac.uk/research/research-projects/coronavirus-government-response-tracker
+       https://ocgptweb.azurewebsites.net/CSVDownload
+       complied by Hale, Webster, Petherick, Phillips, Kira (2020), CC-BY-SA 4.0
+       
     read table of measures from CSV file,
     and download data from github if not present or forced
     
@@ -22,7 +28,8 @@ class COVID19_measures(object):
     ( with default options )
     ***************************************************
     
-        data = COVID19_measures( download_data        = False,
+        data = COVID19_measures( datasource           = 'CSH',
+                                 download_data        = False,
                                  measure_level        = 2,
                                  only_first_dates     = False,
                                  unique_dates         = True,
@@ -49,6 +56,9 @@ class COVID19_measures(object):
         self.DATAFILE             = 'COVID19_non-pharmaceutical-interventions.csv'
         self.BASEURL              = 'https://raw.githubusercontent.com/amel-github/covid19-interventionmeasures/master/'
         
+        self.OXFORDURL            = 'https://ocgptweb.azurewebsites.net/CSVDownload'
+        self.OXFORD_DATA          = 'OxCGRT_Download_140420_121402_Full.csv'
+        
         # set default values of options
         self.__downloaddata       = kwargs.get('download_data',        False )
         self.__measurelevel       = kwargs.get('measure_level',        2     )
@@ -58,19 +68,74 @@ class COVID19_measures(object):
         self.__countrycodes       = kwargs.get('country_codes',        False )
         self.__removedcountries   = []
         
+        self.__datasource         = kwargs.get('datasource','CSH')
+        if self.__datasource.upper() not in ['CSH','OXFORD']:
+            raise ValueError
+        
         # can switch internal declaration of countries completely to the ISO3C countrycodes
         # no full names of countries can be used then
-        if self.__countrycodes:     self.__countrycolumn  = 'iso3c'
-        else:                       self.__countrycolumn  = 'Country'
         
-        self.ReadData()
+        if self.__datasource.upper() == 'CSH':
+            if self.__countrycodes:     self.__countrycolumn  = 'iso3c'
+            else:                       self.__countrycolumn  = 'Country'
+            self.ReadDataCSH()
+        elif self.__datasource.upper() == 'OXFORD':
+            if self.__countrycodes:     self.__countrycolumn  = 'CountryCodes'
+            else:                       self.__countrycolumn  = 'CountryNames'
+            self.ReadDataOxford()
+            
     
     def DownloadData(self):
-        tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
-        tmpdata.to_csv(self.DATAFILE)
+        if self.__datasource.upper() == 'CSH':
+            tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
+            tmpdata.to_csv(self.DATAFILE)
+        elif self.__datasource.upper() == 'OXFORD':
+            tmpdata = pd.read_csv(self.OXFORDURL)
+            tmpdata.to_csv(self.OXFORD_DATA)
+    
+    def ReadDataOxford(self):
+        def convertDate(datestr):
+            return datetime.datetime.strptime(str(datestr),'%Y%m%d').strftime('%d/%m/%Y')
+        
+        oxforddata = pd.read_csv(self.OXFORD_DATA)
+        self.__countrylist = list(oxforddata[self.__countrycolumn].unique())
+
+        measurecolumns = []
+        for mc in oxforddata.columns:
+            if not re.search('^S\d+\_',mc) is None:
+                if mc[-7:] != 'IsGeneral' and mc[-5:] != 'Notes':
+                    measurecolumns.append(mc)
+        
+        self.__data = None
+        
+        for country in self.__countrylist:
+            countrydata = oxforddata[oxforddata[self.__countrycolumn] == country]
+            for mc in measurecolumns:
+                for date in countrydata[countrydata[mc].diff() > 0]['Date']:
+                    db_entry_dict = {self.__countrycolumn:country,'Date':convertDate(date),'Measure_L1':mc}
+                    if self.__data is None:
+                        self.__data = pd.DateFrame({k:np.array([v]) for k,v in db_entry_dict})
+                    else:
+                        self.__data = self.__data.append(db_entry_dict, ignore_index = True)
+
+
+
+        
+        measurecolumns = []
+        for mc in oxforddata.columns:
+            if not re.search('^[S]{1}/d+\_',mc) is None:
+                if not 'IsGeneral' in mc or 'Notes' in mc:
+                    measurecolumns.append(mc)
+        
+        self.__data = pd.DataFrame(columns = [self.__countrycodes, 'Date', 'Measure_L1'])
+        
+        for country in self.__countrylist:
+            countrydata = oxforddata[oxforddata[self.__countrycolumn] == country]
+            for mc in measurecolumns:
+                dates = countrydata[countrydata[mc].diff().dropna() > 0]['Date']
     
     
-    def ReadData(self):
+    def ReadDataCSH(self):
         if not os.path.exists(self.DATAFILE) or self.__downloaddata:
             self.DownloadData()
 
