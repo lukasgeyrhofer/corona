@@ -81,7 +81,7 @@ class COVID19_measures(object):
             self.ReadDataCSH()
         elif self.__datasource.upper() == 'OXFORD':
             if self.__countrycodes:     self.__countrycolumn  = 'CountryCodes'
-            else:                       self.__countrycolumn  = 'CountryNames'
+            else:                       self.__countrycolumn  = 'CountryName'
             self.ReadDataOxford()
             
     
@@ -114,25 +114,10 @@ class COVID19_measures(object):
                 for date in countrydata[countrydata[mc].diff() > 0]['Date']:
                     db_entry_dict = {self.__countrycolumn:country,'Date':convertDate(date),'Measure_L1':mc}
                     if self.__data is None:
-                        self.__data = pd.DateFrame({k:np.array([v]) for k,v in db_entry_dict})
+                        self.__data = pd.DataFrame({k:np.array([v]) for k,v in db_entry_dict.items()})
                     else:
                         self.__data = self.__data.append(db_entry_dict, ignore_index = True)
 
-
-
-        
-        measurecolumns = []
-        for mc in oxforddata.columns:
-            if not re.search('^[S]{1}/d+\_',mc) is None:
-                if not 'IsGeneral' in mc or 'Notes' in mc:
-                    measurecolumns.append(mc)
-        
-        self.__data = pd.DataFrame(columns = [self.__countrycodes, 'Date', 'Measure_L1'])
-        
-        for country in self.__countrylist:
-            countrydata = oxforddata[oxforddata[self.__countrycolumn] == country]
-            for mc in measurecolumns:
-                dates = countrydata[countrydata[mc].diff().dropna() > 0]['Date']
     
     
     def ReadDataCSH(self):
