@@ -101,6 +101,9 @@ class COVID19_measures(object):
         def convertDate(datestr):
             return datetime.datetime.strptime(str(datestr),'%Y%m%d').strftime('%d/%m/%Y')
         
+        if not os.path.exists(self.OXFORD_DATA) or self.__downloaddata:
+            self.DownloadData()
+        
         oxforddata         = pd.read_csv(self.OXFORD_DATA)
         self.__countrylist = list(oxforddata[self.__countrycolumn].unique())
         self.__data        = None
