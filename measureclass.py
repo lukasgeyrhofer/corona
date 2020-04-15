@@ -83,8 +83,11 @@ class COVID19_measures(object):
             if self.__countrycodes:     self.__countrycolumn  = 'CountryCodes'
             else:                       self.__countrycolumn  = 'CountryName'
             self.ReadDataOxford()
-            
-    
+        
+        self.__max_measure_level_dict = {'CSH':4,'OXFORD':1}
+        self.__max_measure_level      = self.__max_measure_level_dict[self.__datasource.upper()]
+
+
     def DownloadData(self):
         if self.__datasource.upper() == 'CSH':
             tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
@@ -92,6 +95,7 @@ class COVID19_measures(object):
         elif self.__datasource.upper() == 'OXFORD':
             tmpdata = pd.read_csv(self.OXFORDURL)
             tmpdata.to_csv(self.OXFORD_DATA)
+
     
     def ReadDataOxford(self):
         def convertDate(datestr):
@@ -118,7 +122,6 @@ class COVID19_measures(object):
                     else:
                         self.__data = self.__data.append(db_entry_dict, ignore_index = True)
 
-    
     
     def ReadDataCSH(self):
         if not os.path.exists(self.DATAFILE) or self.__downloaddata:
@@ -150,6 +153,8 @@ class COVID19_measures(object):
             if unique_dates is None:         unique_dates         = self.__uniquedates
             if extend_measure_names is None: extend_measure_names = self.__extendmeasurenames
             
+            if measure_level > self.__max_measure_level: measure_level = self.__max_measure_level
+
             countrydata           = self.__data[self.__data[self.__countrycolumn] == country]
             if measure_level >= 2:
                 for ml in range(2,measure_level+1):
