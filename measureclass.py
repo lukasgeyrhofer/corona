@@ -101,16 +101,15 @@ class COVID19_measures(object):
         def convertDate(datestr):
             return datetime.datetime.strptime(str(datestr),'%Y%m%d').strftime('%d/%m/%Y')
         
-        oxforddata = pd.read_csv(self.OXFORD_DATA)
+        oxforddata         = pd.read_csv(self.OXFORD_DATA)
         self.__countrylist = list(oxforddata[self.__countrycolumn].unique())
+        self.__data        = None
+        measurecolumns     = []
 
-        measurecolumns = []
         for mc in oxforddata.columns:
             if not re.search('^S\d+\_',mc) is None:
-                if mc[-7:] != 'IsGeneral' and mc[-5:] != 'Notes':
+                if mc[-7:].lower() != 'general' and mc[-5:].lower() != 'notes':
                     measurecolumns.append(mc)
-        
-        self.__data = None
         
         for country in self.__countrylist:
             countrydata = oxforddata[oxforddata[self.__countrycolumn] == country]
@@ -253,7 +252,7 @@ class COVID19_measures(object):
     
     def __getattr__(self,key):
         if key in self.__countrylist:
-            return self.GetCountryData(country = key)
+            return self.CountryData(country = key)
         elif key == 'countrylist':
             return self.__countrylist
         
