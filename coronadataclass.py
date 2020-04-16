@@ -45,13 +45,13 @@ class CoronaData(object):
 
         self.__data                = {}
         self.__maxtrajectorylength = 0
-        
+        self.__gpsmooth = {'restarts_optimizer': 10,'enabled':kwargs.get('SmoothTrajectories',False),'alpha':kwargs.get('SmoothAlpha',1.)}
+
         if kwargs.get('download_data',False):
             self.DownloadData()
             
         self.LoadData()
 
-        self.__gpsmooth = {'restarts_optimizer': 10,'enabled':kwargs.get('SmoothTrajectories',False),'alpha':kwargs.get('SmoothAlpha',1.)}
 
     def LoadData(self):
         
@@ -118,6 +118,7 @@ class CoronaData(object):
             return gp.predict(x)
         else:
             return traj
+
 
     def __getattr__(self,key):
         if key.lower() == 'countrylist':
