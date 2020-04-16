@@ -3,6 +3,8 @@ import pandas as pd
 import os
 import datetime
 
+import sklearn.gaussian_process as sklgp
+
 class CoronaData(object):
     '''
     ***********************************************************
@@ -49,6 +51,7 @@ class CoronaData(object):
             
         self.LoadData()
 
+        self.__gpsmooth = {'restarts_optimizer': 10,'enabled':kwargs.get('SmoothTrajectories',False),'alpha':kwargs.get('SmoothAlpha',1.)}
 
     def LoadData(self):
         
@@ -87,6 +90,7 @@ class CoronaData(object):
         data_deaths.to_csv(self.DEATH)
         data_recovered.to_csv(self.RECOVERED)
     
+    
     def DateAtCases(self, country, cases = 1, column = 'Confirmed', outputformat = '%d%m%Y'):
         cd = self.CountryData(country)
         index = np.argmin(cd[column] <= cases)
@@ -96,15 +100,30 @@ class CoronaData(object):
 
     def CountryData(self, country):
         if country in self.__countrylist:
-            return self.__data[country]
+            if self.__gpsmooth['enabled']:
+                return self.__data[country].apply(self.SmoothTrajectory,axis = 0)
+            else:
+                return self.__data[country]
         else:
             return None
+
+
+    def SmoothTrajectory(self,traj):
+        if not isinstance(traj.values[0],str):
+            x = np.atleast_2d(np.arange(len(traj))).T
+            kernel = sklgp.kernels.RBF()
+            gp = sklgp.GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer = self.__gpsmooth['restarts_optimizer'],alpha = self.__gpsmooth['alpha'])
+            gp.fit(x,traj)
+            
+            return gp.predict(x)
+        else:
+            return traj
 
     def __getattr__(self,key):
         if key.lower() == 'countrylist':
             return self.__countrylist
         elif key.replace('_',' ') in self.__countrylist:
-            return self.__data[key]
+            return self.CountryData(country = key)
         else:
             raise KeyError
         
