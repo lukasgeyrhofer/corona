@@ -53,11 +53,6 @@ class COVID19_measures(object):
     '''
     
     def __init__(self,**kwargs):
-        self.DATAFILE             = 'COVID19_non-pharmaceutical-interventions.csv'
-        self.BASEURL              = 'https://raw.githubusercontent.com/amel-github/covid19-interventionmeasures/master/'
-        
-        self.OXFORDURL            = 'https://ocgptweb.azurewebsites.net/CSVDownload'
-        self.OXFORD_DATA          = 'OxCGRT_Download_140420_121402_Full.csv'
         
         # set default values of options
         self.__downloaddata       = kwargs.get('download_data',        False )
@@ -66,72 +61,82 @@ class COVID19_measures(object):
         self.__uniquedates        = kwargs.get('unique_dates',         True  )
         self.__extendmeasurenames = kwargs.get('extend_measure_names', False )
         self.__countrycodes       = kwargs.get('country_codes',        False )
+        self.__dateformat         = kwargs.get('dateformat',           '%d/%m/%Y')
         self.__removedcountries   = []
         
-        self.__datasource         = kwargs.get('datasource','CSH')
-        if self.__datasource.upper() not in ['CSH','OXFORD']:
-            raise ValueError
+        self.__datasource         = (kwargs.get('datasource','CSH')).upper()
+        self.__datasourceinfo     = {   'CSH':    {'dateformat':          '%d/%m/%Y',
+                                                   'Country':             'Country',
+                                                   'CountryCodes':        'iso3c',
+                                                   'MaxMeasureLevel':     4,
+                                                   'DownloadURL':         'https://raw.githubusercontent.com/amel-github/covid19-interventionmeasures/master/COVID19_non-pharmaceutical-interventions.csv',
+                                                   'DatafileName':        'COVID19_non-pharmaceutical-interventions.csv',
+                                                   'DatafileReadOptions': {'sep': ',', 'quotechar': '"', 'encoding': 'latin-1'}},
+                                        'OXFORD': {'dateformat':          '%Y%m%d',
+                                                   'Country':             'CountryName',
+                                                   'CountryCodes':        'CountryCode',
+                                                   'MaxMeasureLevel':     1,
+                                                   'DownloadURL':         'https://ocgptweb.azurewebsites.net/CSVDownload',
+                                                   'DatafileName':        'OxCGRT_Full.csv',
+                                                   'DatafileReadOptions': {}}
+                                    }
         
         # can switch internal declaration of countries completely to the ISO3C countrycodes
         # no full names of countries can be used then
-        
-        if self.__datasource.upper() == 'CSH':
-            if self.__countrycodes:     self.__countrycolumn  = 'iso3c'
-            else:                       self.__countrycolumn  = 'Country'
-            self.ReadDataCSH()
-        elif self.__datasource.upper() == 'OXFORD':
-            if self.__countrycodes:     self.__countrycolumn  = 'CountryCodes'
-            else:                       self.__countrycolumn  = 'CountryName'
-            self.ReadDataOxford()
-        
-        self.__max_measure_level_dict = {'CSH':4,'OXFORD':1}
-        self.__max_measure_level      = self.__max_measure_level_dict[self.__datasource.upper()]
+        if self.__countrycodes:   self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['CountryCodes']
+        else:                     self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['Country']
+
+        if self.__datasource in self.__datasourceinfo.keys():
+            self.ReadData()
+        else:
+            raise NotImplementedError
 
 
     def DownloadData(self):
-        if self.__datasource.upper() == 'CSH':
-            tmpdata = pd.read_csv(self.BASEURL + self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
-            tmpdata.to_csv(self.DATAFILE)
-        elif self.__datasource.upper() == 'OXFORD':
-            tmpdata = pd.read_csv(self.OXFORDURL)
-            tmpdata.to_csv(self.OXFORD_DATA)
+        tmpdata = pd.read_csv(self.__datasourceinfo[self.__datasource]['DownloadURL'],**self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
+        tmpdata.to_csv(self.__datasourceinfo[self.__datasource]['DatafileName'])
 
     
-    def ReadDataOxford(self):
-        def convertDate(datestr):
-            return datetime.datetime.strptime(str(datestr),'%Y%m%d').strftime('%d/%m/%Y')
-        
-        if not os.path.exists(self.OXFORD_DATA) or self.__downloaddata:
+    def convertDate(self,datestr):
+        return datetime.datetime.strptime(str(datestr),self.__datasourceinfo[self.__datasource]['dateformat']).strftime(self.__dateformat)
+
+    
+    def ReadData(self):
+        if not os.path.exists(self.__datasourceinfo[self.__datasource]['DatafileName']) or self.__downloaddata:
             self.DownloadData()
         
-        oxforddata         = pd.read_csv(self.OXFORD_DATA)
-        self.__countrylist = list(oxforddata[self.__countrycolumn].unique())
-        self.__data        = None
-        measurecolumns     = []
-
-        for mc in oxforddata.columns:
-            if not re.search('^S\d+\_',mc) is None:
-                if mc[-7:].lower() != 'general' and mc[-5:].lower() != 'notes':
-                    measurecolumns.append(mc)
+        readdata           = pd.read_csv(self.__datasourceinfo[self.__datasource]['DatafileName'],**self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
+        self.__countrylist = list(readdata[self.__countrycolumn].unique())
         
-        for country in self.__countrylist:
-            countrydata = oxforddata[oxforddata[self.__countrycolumn] == country]
-            for mc in measurecolumns:
-                for date in countrydata[countrydata[mc].diff() > 0]['Date']:
-                    db_entry_dict = {self.__countrycolumn:country,'Date':convertDate(date),'Measure_L1':mc}
-                    if self.__data is None:
-                        self.__data = pd.DataFrame({k:np.array([v]) for k,v in db_entry_dict.items()})
-                    else:
-                        self.__data = self.__data.append(db_entry_dict, ignore_index = True)
-
+        if self.__datasource == 'CSH':
+            self.__data    = readdata
     
-    def ReadDataCSH(self):
-        if not os.path.exists(self.DATAFILE) or self.__downloaddata:
-            self.DownloadData()
+        elif self.__datasource == 'OXFORD':
+            self.__data    = None
 
-        self.__data        = pd.read_csv(self.DATAFILE, sep = ',', quotechar = '"', encoding = 'latin-1')
-        self.__countrylist = list(self.__data[self.__countrycolumn].unique())
-    
+            # construct list of measures from DB column names
+            # naming scheme is 'S[NUMBER]_NAME'
+            # in addition to columns 'S[NUMBER]_IsGeneral' and 'S[NUMBER]_Notes' for more info
+            measurecolumns     = []
+            for mc in readdata.columns:
+                if not re.search('^S\d+\_',mc) is None:
+                    if mc[-7:].lower() != 'general' and mc[-5:].lower() != 'notes':
+                        measurecolumns.append(mc)
+            
+            # reconstruct same structure of CSH DB bottom up
+            for country in self.__countrylist:
+                countrydata = readdata[readdata[self.__countrycolumn] == country]
+                for mc in measurecolumns:
+                    for date in countrydata[countrydata[mc].diff() > 0]['Date']:
+                        db_entry_dict = {self.__countrycolumn: country, 'Date': self.convertDate(date), 'Measure_L1': mc}
+                        if self.__data is None:
+                            self.__data = pd.DataFrame({k:np.array([v]) for k,v in db_entry_dict.items()})
+                        else:
+                            self.__data = self.__data.append(db_entry_dict, ignore_index = True)
+        
+        else:
+            NotImplementedError
+            
     
     def RemoveCountry(self, country = None):
         if country in self.__countrylist:
@@ -147,6 +152,12 @@ class COVID19_measures(object):
             self.__data.replace(to_replace = country, value = newname, inplace = True)
     
     
+    def SortDates(self,datelist):
+        tmp_datelist = list(datelist[:])
+        tmp_datelist.sort(key = lambda x:datetime.datetime.strptime(x,self.__dateformat))
+        return tmp_datelist
+    
+    
     def CountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
         if country in self.__countrylist:
             
@@ -155,7 +166,7 @@ class COVID19_measures(object):
             if unique_dates is None:         unique_dates         = self.__uniquedates
             if extend_measure_names is None: extend_measure_names = self.__extendmeasurenames
             
-            if measure_level > self.__max_measure_level: measure_level = self.__max_measure_level
+            if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']: measure_level = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
 
             countrydata           = self.__data[self.__data[self.__countrycolumn] == country]
             if measure_level >= 2:
@@ -177,9 +188,9 @@ class COVID19_measures(object):
                 mgdata            = mgdata.apply(set)
             
             # rebuild as dict
-            mgdata                = dict((k.strip(),v) for k,v in dict(mgdata.apply(list)).items())
+            mgdata                = {k.strip():self.SortDates(v) for k,v in dict(mgdata.apply(list)).items()}
             if only_first_dates:
-                mgdata            = dict((k,[min(v)]) for k,v in mgdata.items())
+                mgdata            = {k:[v[0]] for k,v in mgdata.items()}
                 
             return mgdata
         else:
@@ -213,7 +224,7 @@ class COVID19_measures(object):
 
 
     def CleanUpMeasureName(self, measurename = '', clean_up = True):
-        if clean_up:    return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('-','').split(' ')])
+        if clean_up:    return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('-',' ').replace('_',' ').split(' ')])
         else:           return measurename
 
 
