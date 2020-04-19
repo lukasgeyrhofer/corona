@@ -109,21 +109,21 @@ class COVID19_measures(object):
         self.__countrylist = list(readdata[self.__countrycolumn].unique())
         
         if self.__datasource == 'CSH':
+            # store CSV directly as data
             self.__data    = readdata
     
         elif self.__datasource == 'OXFORD':
-            self.__data    = None
-
             # construct list of measures from DB column names
             # naming scheme is 'S[NUMBER]_NAME'
             # in addition to columns 'S[NUMBER]_IsGeneral' and 'S[NUMBER]_Notes' for more info
-            measurecolumns     = []
+            measurecolumns = []
             for mc in readdata.columns:
                 if not re.search('^S\d+\_',mc) is None:
                     if mc[-7:].lower() != 'general' and mc[-5:].lower() != 'notes':
                         measurecolumns.append(mc)
             
             # reconstruct same structure of CSH DB bottom up
+            self.__data    = None
             for country in self.__countrylist:
                 countrydata = readdata[readdata[self.__countrycolumn] == country]
                 for mc in measurecolumns:
@@ -168,7 +168,7 @@ class COVID19_measures(object):
             
             if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']: measure_level = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
 
-            countrydata           = self.__data[self.__data[self.__countrycolumn] == country]
+            countrydata           = self.__data[self.__data[self.__countrycolumn] == country].copy(deep = True)
             if measure_level >= 2:
                 for ml in range(2,measure_level+1):
                     # fill columns with previous measure levels, if empty (otherwise the empty fields generate errors)
