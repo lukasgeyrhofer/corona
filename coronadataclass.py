@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import datetime
 
-import sklearn.gaussian_process as sklgp
 
 class CoronaData(object):
     '''
@@ -45,7 +44,6 @@ class CoronaData(object):
 
         self.__data                = {}
         self.__maxtrajectorylength = 0
-        self.__gpsmooth = {'restarts_optimizer': 10,'enabled':kwargs.get('SmoothTrajectories',False),'alpha':kwargs.get('SmoothAlpha',1.)}
 
         if kwargs.get('download_data',False):
             self.DownloadData()
@@ -98,26 +96,14 @@ class CoronaData(object):
         return datetime.datetime.strftime(casetime,outputformat)
 
 
-    def CountryData(self, country):
+    def CountryData(self, country, windowsize = None, window_stddev = 1):
         if country in self.__countrylist:
-            if self.__gpsmooth['enabled']:
-                return self.__data[country].apply(self.SmoothTrajectory,axis = 0)
+            if not windowsize is None:
+                return self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1).mean(std = window_stddev).join(self.__data[country].Date)
             else:
                 return self.__data[country]
         else:
             return None
-
-
-    def SmoothTrajectory(self,traj):
-        if not isinstance(traj.values[0],str):
-            x = np.atleast_2d(np.arange(len(traj))).T
-            kernel = sklgp.kernels.RBF()
-            gp = sklgp.GaussianProcessRegressor(kernel = kernel, n_restarts_optimizer = self.__gpsmooth['restarts_optimizer'],alpha = self.__gpsmooth['alpha'])
-            gp.fit(x,traj)
-            
-            return gp.predict(x)
-        else:
-            return traj
 
 
     def __getattr__(self,key):
