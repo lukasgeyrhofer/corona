@@ -99,7 +99,10 @@ class CoronaData(object):
     def CountryData(self, country, windowsize = None, window_stddev = 1):
         if country in self.__countrylist:
             if not windowsize is None:
-                return self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1).mean(std = window_stddev).join(self.__data[country].Date)
+                if windows_stddev > 0:
+                    return self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = window_stddev).join(self.__data[country].Date)
+                else:
+                    return self.__data[country]
             else:
                 return self.__data[country]
         else:
