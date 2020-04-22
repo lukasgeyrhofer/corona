@@ -96,15 +96,32 @@ class CoronaData(object):
         return datetime.datetime.strftime(casetime,outputformat)
 
 
-    def CountryData(self, country, windowsize = None, window_stddev = 1):
+    def CountryData(self, country, windowsize = None, stddev = 1):
         if country in self.__countrylist:
             if not windowsize is None:
-                if window_stddev > 0:
-                    return self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = window_stddev).join(self.__data[country].Date)
-                else:
-                    return self.__data[country]
-            else:
-                return self.__data[country]
+                if stddev > 0:
+                    return self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).join(self.__data[country].Date)
+
+            return self.__data[country]
+        else:
+            return None
+
+
+    def CountryGrowthRates(self, country, windowsize = None, stddev = 1):
+        def GrowthRate(trajectory):
+            growthrate = np.diff(np.log(trajectory))
+            growthrate = np.nan_to_num(growthrate)
+            growthrate[growthrate > 1e300] = 0            
+            return growthrate
+
+        if country in self.__countrylist:
+            returnDF = self.__data[country].apply({k:GrowthRate for k in self.__data[country].columns if k != 'Date'}).join(self.__data[country].Date)
+            
+            if not windowsize is None:
+                if stddev > 0:
+                    return returnDF.rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).join(self.__data[country].Date)
+            
+            return returnDF
         else:
             return None
 
