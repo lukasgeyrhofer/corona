@@ -44,6 +44,10 @@ class CoronaData(object):
 
         self.__data                = {}
         self.__maxtrajectorylength = 0
+        
+        self.__smooth_windowsize = kwargs.get('SmoothWindowSize',None)
+        self.__smooth_stddev     = kwargs.get('SmoothStdDev',None)
+        
 
         if kwargs.get('download_data',False):
             self.DownloadData()
@@ -96,9 +100,12 @@ class CoronaData(object):
         return datetime.datetime.strftime(casetime,outputformat)
 
 
-    def CountryData(self, country, windowsize = None, stddev = 1):
+    def CountryData(self, country, windowsize = None, stddev = None):
+        if windowsize is None: windowsize = self.__smooth_windowsize
+        if stddev     is None: stddev     = self.__smooth_stddev
+        
         if country in self.__countrylist:
-            if not windowsize is None:
+            if (not windowsize is None) and (not stddev is None):
                 if stddev > 0:
                     return self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).join(self.__data[country].Date)
 
@@ -107,17 +114,20 @@ class CoronaData(object):
             return None
 
 
-    def CountryGrowthRates(self, country, windowsize = None, stddev = 1):
+    def CountryGrowthRates(self, country, windowsize = None, stddev = None):
         def GrowthRate(trajectory):
             growthrate = np.diff(np.log(trajectory))
             growthrate = np.nan_to_num(growthrate)
             growthrate[growthrate > 1e300] = 0            
             return growthrate
 
+        if windowsize is None: windowsize = self.__smooth_windowsize
+        if stddev     is None: stddev     = self.__smooth_stddev
+
         if country in self.__countrylist:
             returnDF = self.__data[country].apply({k:GrowthRate for k in self.__data[country].columns if k != 'Date'}).join(self.__data[country].Date)
             
-            if not windowsize is None:
+            if (not windowsize is None) and (not stddev is None):
                 if stddev > 0:
                     return returnDF.rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).join(self.__data[country].Date)
             
