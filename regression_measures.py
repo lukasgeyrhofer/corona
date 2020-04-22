@@ -37,7 +37,7 @@ def CleanUpMeasureName(measurename):
     return ''.join([mn.capitalize() for mn in measurename.replace(',','').replace('-','').replace('/','').split(' ')])
 
 
-def GetMeasureIDs(countrylist = None, measure_level = 2, mincount = None, extend_measure_names = False):
+def GetMeasureIDs(measure_data = None, countrylist = None, measure_level = 2, mincount = None, extend_measure_names = False):
     if countrylist is None:
         countrylist = measure_data.countrylist # use ALL countries
     
@@ -161,7 +161,7 @@ def GetRegressionDF(jhu_data = None, measure_data = None, countrylist = None, me
     # not implemented measures should be NaN values, set them to 0
     regressionDF.fillna(0, inplace = True)
     
-    return regressionDF, cleaned_measurelist
+    return regressionDF
 
 
 
