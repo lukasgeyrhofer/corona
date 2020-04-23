@@ -93,11 +93,14 @@ class CoronaData(object):
         data_recovered.to_csv(self.RECOVERED)
     
     
-    def DateAtCases(self, country, cases = 1, column = 'Confirmed', outputformat = '%d%m%Y'):
+    def DateAtCases(self, country, cases = 1, column = 'Confirmed', outputformat = '%d%m%Y', return_index = False):
         cd = self.CountryData(country)
         index = np.argmin(cd[column] <= cases)
         casetime = datetime.datetime.strptime('22/1/2020','%d/%m/%Y') + datetime.timedelta(days = index)
-        return datetime.datetime.strftime(casetime,outputformat)
+        if return_index:
+            return datetime.datetime.strftime(casetime,outputformat),index
+        else:
+            return datetime.datetime.strftime(casetime,outputformat)
 
 
     def CountryData(self, country, windowsize = None, stddev = None):

@@ -239,7 +239,7 @@ class COVID19_measures(object):
             return None
     
     
-    def MeasureList(self, countrylist = None, measure_level = None, mincount = None, extend_measure_names = None):
+    def MeasureList(self, countrylist = None, measure_level = None, mincount = None, extend_measure_names = None, clean_measurename = False):
         if extend_measure_names is None:    extend_measure_neames = self.__extendmeasurenames
         if countrylist is None:             countrylist = self.__countrylist # use ALL countries
         measurelist = {}
@@ -252,7 +252,7 @@ class COVID19_measures(object):
                 measurelist[measurename] += 1
         if not mincount is None:
             # rebuild dict with restrictions
-            measurelist = {k:v for k,v in measurelist.items() if v >= mincount}
+            measurelist = {self.CleanUpMeasureName(k,clean_measurename):v for k,v in measurelist.items() if v >= mincount}
         return measurelist
     
     
