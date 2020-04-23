@@ -99,9 +99,10 @@ class CoronaData(object):
         data_recovered.to_csv(self.RECOVERED)
     
     
-    def DateAtCases(self, country, cases = 1, column = 'Confirmed', outputformat = '%d%m%Y', return_index = False):
+    def DateAtCases(self, country, cases = 1, column = 'Confirmed', return_index = False, outputformat = None):
+        if outputformat is None: outputformat = self.__output_dateformat
         cd = self.CountryData(country)
-        index = np.argmin(cd[column] <= cases)
+        index = int(np.argmin(cd[column].values <= cases))
         casetime = datetime.datetime.strptime('22/1/2020','%d/%m/%Y') + datetime.timedelta(days = index)
         if return_index:
             return datetime.datetime.strftime(casetime,outputformat),index
@@ -125,7 +126,9 @@ class CoronaData(object):
 
     def CountryGrowthRates(self, country = None, windowsize = None, stddev = None):
         def GrowthRate(trajectory):
+            storewarnings = np.seterr(invalid = 'ignore')
             growthrate = np.diff(np.log(trajectory))
+            np.seterr(**storewarnings)
             growthrate = np.nan_to_num(growthrate)
             growthrate[growthrate > 1e300] = 0            
             return growthrate
