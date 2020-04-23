@@ -202,14 +202,14 @@ class COVID19_measures(object):
                 return self.__data[self.__data[self.__countrycolumn] == country].reset_index()
     
 
-    def date2vector(self, implementdate, start = '22/1/20', end = None, shiftdays = 0, maxlen = None):
+    def date2vector(self, implementdate, start = '22/1/2020', end = None, shiftdays = 0, maxlen = None, datefmt = '%d/%m/%Y'):
         # generate vector of 0s and 1s when measure is implemented or not
-        starttime     = datetime.datetime.strptime(start,         '%d/%m/%y')
+        starttime     = datetime.datetime.strptime(start,         datefmt)
         if end is None:
             endtime   = datetime.datetime.today()
         else:
-            endtime   = datetime.datetime.strptime(end,           '%d/%m/%y')
-        implementtime = datetime.datetime.strptime(implementdate, '%d/%m/%Y')
+            endtime   = datetime.datetime.strptime(end,           datefmt)
+        implementtime = datetime.datetime.strptime(implementdate, datefmt)
         
         totaldays   = (endtime       - starttime).days
         measuredays = (implementtime - starttime).days

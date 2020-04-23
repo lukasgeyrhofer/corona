@@ -48,11 +48,17 @@ class CoronaData(object):
         self.__smooth_windowsize = kwargs.get('SmoothWindowSize',None)
         self.__smooth_stddev     = kwargs.get('SmoothStdDev',None)
         
-
+        self.__output_dateformat = kwargs.get('DateFormat','%d/%m/%Y')
+        self.__input_dateformat  = '%m/%d/%y'
+        
         if kwargs.get('download_data',False):
             self.DownloadData()
             
         self.LoadData()
+
+
+    def ConvertDates(self,datelist):
+        return np.array([datetime.datetime.strptime(date,self.__input_dateformat).strftime(self.__output_dateformat) for date in datelist])
 
 
     def LoadData(self):
@@ -68,7 +74,7 @@ class CoronaData(object):
         self.__countrylist.sort()
         
         for country in self.__countrylist:
-            tmp_dates     = np.array(  self.__data_confirmed.columns[5:])
+            tmp_dates     = self.ConvertDates(self.__data_confirmed.columns[5:])
             tmp_confirmed = np.array(((self.__data_confirmed[self.__data_confirmed['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
             tmp_deaths    = np.array(((self.__data_death    [self.__data_death    ['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
             tmp_recovered = np.array(((self.__data_recovered[self.__data_recovered['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
@@ -117,7 +123,7 @@ class CoronaData(object):
             return None
 
 
-    def CountryGrowthRates(self, country, windowsize = None, stddev = None):
+    def CountryGrowthRates(self, country = None, windowsize = None, stddev = None):
         def GrowthRate(trajectory):
             growthrate = np.diff(np.log(trajectory))
             growthrate = np.nan_to_num(growthrate)
@@ -138,6 +144,11 @@ class CoronaData(object):
         else:
             return None
 
+
+    def FinalDate(self,country):
+        if country in self.countrylist:
+            return self.__data[country]['Date'].tail(1).values[0]
+        
 
     def __getattr__(self,key):
         if key.lower() == 'countrylist':

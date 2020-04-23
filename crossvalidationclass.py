@@ -1,11 +1,17 @@
+#basics
 import numpy as np
 import pandas as pd
-import os
 
+import os
 import itertools
 import datetime
 import time
 
+# statistics
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+# datawrappers
 import coronadataclass as cdc
 import measureclass as mc
 
@@ -39,13 +45,13 @@ class CrossValidation(object):
         regressionDF = None
         measurecount = self.measure_data.MeasureList(countrylist = countrylist, mincount = self.__MeasureMinCount, measure_level = 2)
 
-        for country in trajectories.keys():
-            if country in measure_data.countrylist:
+        for country in countrylist:
+            if country in self.measure_data.countrylist and country in self.jhu_data.countrylist:
 
 
                 # ********************************************
                 # change observable to regress here:
-                observable                  = self.jhu_data.CountryGrowthRates(country = country).Confirmed.values
+                observable                  = self.jhu_data.CountryGrowthRates(country = country)['Confirmed'].values
                 # ********************************************
 
                 startdate, startindex = '22/1/2020', 0
@@ -58,12 +64,13 @@ class CrossValidation(object):
                     
                 obslen                      = len(observable)
                 
-                DF_country = measure_data.ImplementationTable(country           = country,
-                                                              measure_level     = 2,
-                                                              startdate         = startdate,
-                                                              shiftdays         = shiftdays,
-                                                              maxlen            = obslen,
-                                                              clean_measurename = True)
+                DF_country = self.measure_data.ImplementationTable(country           = country,
+                                                                   measure_level     = 2,
+                                                                   startdate         = startdate,
+                                                                   enddate           = self.jhu_data.FinalDate(country),
+                                                                   shiftdays         = shiftdays,
+                                                                   maxlen            = obslen,
+                                                                   clean_measurename = True)
                 
                 for measurename in DF_country.columns:
                     if measurename not in measurecount.keys():
@@ -95,14 +102,17 @@ class CrossValidation(object):
     def RunCV(self, shiftdaylist = [0], alphalist = [1e-5], verbose = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}):
         if verbose is None: verbose = self.__verbose
         
-        for shiftday, alpha in itertools.product(shiftdaylist,alphalist):
-            if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftday,alpha, 'computing'), end = '\r', flush = True)
+        for shiftdays, alpha in itertools.product(shiftdaylist,alphalist):
+            if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, 'computing'), end = '\r', flush = True)
+            
             
             measurelist = list(self.RegressionDF(shiftdays).columns)
             measurelist.remove('Observable')
             measurelist.remove('Country')
             
-            outputheader.update({'shiftday':shiftday, 'alpha':alpha})
+            formula = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
+            
+            outputheader.update({'shiftdays':shiftdays, 'alpha':alpha})
             
             if not countrywise_crossvalidation:
                 # assign samples to each of the crossvalidation chunks
@@ -126,17 +136,17 @@ class CrossValidation(object):
                 testmodel  = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[testidx])
             
                 # if no alphacountry value is given, assume same penalty (alpha) for all paramters
-                if alphacountry is None:
-                    results = trainmodel.fit_regularized(alpha = alpha, L1_wt = 1)
-                else:
-                    # otherwise, penalize measures and countries differently
-                    # no penality for the 'Intercept'
-                    alphavec = np.zeros(len(trainmodel.exog_names))
-                    for i,exogname in enumerate(trainmodel.exog_names):
-                        if exogname[:10] == 'C(Country)': alphavec[i] = alphacountry
-                        elif exogname == 'Intercept':     alphavec[i] = 0
-                        else:                             alphavec[i] = alpha
-                    results = trainmodel.fit_regularized(alpha = alphavec, L1_wt = 1)
+                #if alphacountry is None:
+                results = trainmodel.fit_regularized(alpha = alpha, L1_wt = 1)
+                #else:
+                    ## otherwise, penalize measures and countries differently
+                    ## no penality for the 'Intercept'
+                    #alphavec = np.zeros(len(trainmodel.exog_names))
+                    #for i,exogname in enumerate(trainmodel.exog_names):
+                        #if exogname[:10] == 'C(Country)': alphavec[i] = alphacountry
+                        #elif exogname == 'Intercept':     alphavec[i] = 0
+                        #else:                             alphavec[i] = alpha
+                    #results = trainmodel.fit_regularized(alpha = alphavec, L1_wt = 1)
 
                 # generate list of test params
                 # random sampling could have discarded some of these parameters in the test case
@@ -181,7 +191,7 @@ class CrossValidation(object):
             
             
             
-            if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftday,alpha, datetime.datetime.now().strftime('%H:%M:%S')))
+            if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, datetime.datetime.now().strftime('%H:%M:%S')))
             
     
     
