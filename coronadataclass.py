@@ -117,8 +117,9 @@ class CoronaData(object):
         if country in self.__countrylist:
             if (not windowsize is None) and (not stddev is None):
                 if stddev > 0:
-                    return self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).join(self.__data[country].Date)
-
+                    returnDF = self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev)
+                    returnDF['Date'] = self.__data[country]['Date'].values
+                    return returnDF
             return self.__data[country]
         else:
             return None
@@ -137,12 +138,12 @@ class CoronaData(object):
         if stddev     is None: stddev     = self.__smooth_stddev
 
         if country in self.__countrylist:
-            returnDF = self.__data[country].apply({k:GrowthRate for k in self.__data[country].columns if k != 'Date'}).join(self.__data[country].Date)
+            returnDF = self.__data[country].apply({k:GrowthRate for k in self.__data[country].columns if k != 'Date'}) #.join(self.__data[country].Date)
             
             if (not windowsize is None) and (not stddev is None):
                 if stddev > 0:
-                    return returnDF.rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).join(self.__data[country].Date)
-            
+                    returnDF = returnDF.rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).join(self.__data[country].Date)
+                    returnDF['Date'] = self.__data[country]['Date'].values[1:]
             return returnDF
         else:
             return None
