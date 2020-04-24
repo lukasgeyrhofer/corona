@@ -220,12 +220,97 @@ class CrossValidation(object):
                     if m == 0:
                         ax[j].plot(model.endog[country_mask], lw = 5, label = 'data')
                     ax[j].plot(results.predict()[country_mask], lw = 2, linestyle = '--', label = '({:d}, {:.2f})'.format(self.finalParameters[m][0],np.log10(self.finalParameters[m][1])))
-                ax[j].annotate(country,[5,0.45], ha = 'left', fontsize = 15)
+                ax[j].annotate(country,[5,0.42], ha = 'left', fontsize = 15)
                 ax[j].set_ylim([0,0.5])
                 ax[j].set_xlim([0,60])
                 ax[j].legend()
             fig.tight_layout()
             fig.savefig(filename)
+       
+       
+
+    def PlotMeasureListValues(self, filename = 'measurelist_values.pdf'):
+        def significanceColor(beta):
+            if beta   >  0.00: return 'red'
+            elif beta == 0.00: return 'lightgray'
+            else:              return 'black'
+
+        # amelies colorscheme...                 
+        colornames  = ['gray','#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
+
+        # collect measure names for labels
+        measurelist = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, extend_measure_names = True, measure_level = 2)
+        countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
+        modelcount  = len(self.finalModels)
+        intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
+
+        # convert shortened measure names backward
+        measure_level_dict = {}
+        for mn in measurelist.keys():
+            l1,l2 = mn.split(' - ')
+            if not l1 in measure_level_dict.keys():
+                measure_level_dict[l1] = {}
+            measure_level_dict[l1][l2] = self.measure_data.CleanUpMeasureName(l2)
+        L1names = list(measure_level_dict.keys())
+        L1names.sort()
+
+        # internal counters to determine position to plot
+        ypos = 0
+        groupcolor = 0
+
+        # define positions for various elements
+        label_x        = 1
+        label_x_header = .6
+        value_x        = 12
+        value_dx       = 2
+        boxalpha       = .15
+        
+        # start plot
+        fig,ax = plt.subplots(figsize = (14,23))
+        
+        # country effects
+        ax.annotate('Country specific effects',[label_x_header, len(countrylist)], c = colornames[groupcolor], weight = 'bold' )
+        background = plt.Rectangle([label_x - .6, ypos - .65], value_x + (modelcount-1)*2 + .6, len(countrylist) + 1.8, fill = True, fc = colornames[groupcolor], alpha = boxalpha, zorder = 10)
+        ax.add_patch(background)
+        for country in countrylist[::-1]:
+            ax.annotate(country, [label_x, ypos], c= colornames[groupcolor])
+            for m in range(modelcount):
+                beta_val = self.finalResults[m].params['C(Country)[T.{}]'.format(country)] / intercept[m]
+                ax.annotate('{:6.0f}%'.format(beta_val*100),[value_x + m * value_dx, ypos], c = significanceColor(beta_val), ha = 'right')
+            ypos += 1
+        groupcolor += 1
+        ypos+=2 
+
+        # measure effects
+        for l1 in L1names[::-1]:
+            ax.annotate(l1,[label_x_header, ypos + len(measure_level_dict[l1])], c = colornames[groupcolor], weight = 'bold')
+            L2names = list(measure_level_dict[l1].keys())
+            L2names.sort()
+            
+            background = plt.Rectangle([label_x - .6, ypos - .65], value_x + 2*(modelcount-1) + .6, len(measure_level_dict[l1]) + 1.8, fill = True, fc = colornames[groupcolor], alpha = boxalpha, zorder = 10)
+            ax.add_patch(background)
+            
+            for l2 in L2names[::-1]:
+                ax.annotate(l2,[label_x,ypos],c = colornames[groupcolor])
+                for m in range(modelcount):
+                    beta_val = self.finalResults[m].params[measure_level_dict[l1][l2]] / intercept[m]
+                    ax.annotate('{:6.0f}%'.format(beta_val*100),[value_x + m * value_dx, ypos], c = significanceColor(beta_val), ha = 'right')
+                ypos+=1
+            ypos+=2
+            groupcolor += 1
+
+        # header
+        ax.annotate(r'shiftdays $s$',[label_x,ypos+1])
+        ax.annotate(r'Penality parameter $\log_{10}(\alpha)$',[label_x,ypos])
+        for m in range(modelcount):
+            ax.annotate('{}'.format(self.finalParameters[m][0]),               [value_x + m*value_dx,ypos+1],ha='right')
+            ax.annotate('{:.1f}'.format(np.log10(self.finalParameters[m][1])), [value_x + m*value_dx,ypos],ha='right')        
+
+        # adjust and save
+        ax.set_xlim([0,value_x + 2 * modelcount])
+        ax.set_ylim([-1,ypos+2])
+        ax.axis('off')
+        fig.savefig(filename)
         
 
 
