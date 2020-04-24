@@ -7,6 +7,10 @@ import itertools
 import datetime
 import time
 
+# plotting
+import matplotlib
+import matplotlib.pyplot as plt
+
 # statistics
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
@@ -35,6 +39,9 @@ class CrossValidation(object):
         # set up internal storage
         self.__CVresults     = None
         self.__regrDF        = {}
+    
+        self.__kwargs_for_pickle = kwargs
+    
     
     
     def GenerateRDF(self, shiftdays = 0, countrylist = None):
@@ -73,22 +80,82 @@ class CrossValidation(object):
                 DF_country['Country']     = country
                 DF_country['Observable']  = observable
 
-                if regressionDF is None:
-                    regressionDF = DF_country
-                else:
-                    regressionDF = pd.concat([regressionDF,DF_country], ignore_index = True, sort = False)
-    
+
+                regressionDF = self.addDF(regressionDF,DF_country)
+
         # not implemented measures should be NaN values, set them to 0
         regressionDF.fillna(0, inplace = True)
         
         return regressionDF
             
     
+    
     def RegressionDF(self,shiftdays = 0):
         if not shiftdays in self.__regrDF.keys():
             self.__regrDF[shiftdays] = self.GenerateRDF(shiftdays = shiftdays)
-        
         return self.__regrDF[shiftdays]
+    
+    
+    
+    def SingleParamCV(self, shiftdays = None, alpha = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}):
+        
+        curResDF          = None
+        measurelist       = list(self.RegressionDF(shiftdays).columns)
+        measurelist.remove('Observable')
+        measurelist.remove('Country')
+        
+        formula           = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
+        
+        if not countrywise_crossvalidation:
+            # assign samples to each of the crossvalidation chunks
+            datalen       = len(self.RegressionDF(shiftdays))
+            chunklen      = np.ones(crossvalcount,dtype = np.int) * (datalen // crossvalcount)
+            chunklen[:datalen%crossvalcount] += 1
+            samples       = np.random.permutation(np.concatenate([i*np.ones(chunklen[i],dtype = np.int) for i in range(crossvalcount)]))
+        else:
+            countrylist   = list(self.RegressionDF(shiftdays)['Country'].unique())
+            crossvalcount = len(countrylist)
+            samples       = np.concatenate([i * np.ones(len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == countrylist[i]])) for i in range(crossvalcount)])
+        
+        for xv_index in range(crossvalcount):
+            trainidx      = (samples != xv_index)
+            testidx       = (samples == xv_index)
+            trainmodel    = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[trainidx])
+            testmodel     = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[testidx])
+        
+            trainresults  = trainmodel.fit_regularized(alpha = alpha, L1_wt = 1)
+
+            test_params   = []
+            for paramname in testmodel.exog_names:
+                if paramname in trainresults.params.keys():
+                    test_params.append(trainresults.params[paramname])
+                else:
+                    test_params.append(0)
+
+            obs_train     = np.array(trainmodel.endog)
+            obs_test      = np.array(testmodel.endog)
+            pred_train    = trainmodel.predict(trainresults.params)
+            pred_test     = testmodel.predict(test_params)
+                
+            # store results in dict
+            result_dict                     = {'shiftdays': shiftdays, 'alpha': alpha}
+            if countrywise_crossvalidation:
+                result_dict['Iteration']    = countrylist[xv_index]
+            else:
+                result_dict['Iteration']    = xv_index
+            result_dict['Loglike Training'] = trainmodel.loglike(trainresults.params)
+            result_dict['Loglike Test']     = testmodel.loglike(np.array(test_params))
+            result_dict['R2 Training']      = 1 - np.sum((obs_train - pred_train)**2)/np.sum((obs_train - np.mean(obs_train))**2)
+            result_dict['R2 Test']          = 1 - np.sum((obs_test - pred_test)**2)/np.sum((obs_test - np.mean(obs_test))**2)
+            result_dict['RSS Training']     = np.sum((obs_train - pred_train)**2)
+            result_dict['RSS Test']         = np.sum((obs_test - pred_test)**2)
+
+            result_dict.update({k:v for k,v in trainresults.params.items()})
+            
+            curResDF = self.addDF(curResDF,pd.DataFrame({k:np.array([v]) for k,v in result_dict.items()}))
+        
+        return curResDF
+    
     
         
     def RunCV(self, shiftdaylist = [0], alphalist = [1e-5], verbose = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}):
@@ -97,74 +164,103 @@ class CrossValidation(object):
         for shiftdays, alpha in itertools.product(shiftdaylist,alphalist):
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, 'computing'), end = '\r', flush = True)
             
-            measurelist       = list(self.RegressionDF(shiftdays).columns)
-            measurelist.remove('Observable')
-            measurelist.remove('Country')
-            
-            formula           = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
-            
-            if not countrywise_crossvalidation:
-                # assign samples to each of the crossvalidation chunks
-                datalen       = len(self.RegressionDF(shiftdays))
-                chunklen      = np.ones(crossvalcount,dtype = np.int) * (datalen // crossvalcount)
-                chunklen[:datalen%crossvalcount] += 1
-                samples       = np.random.permutation(np.concatenate([i*np.ones(chunklen[i],dtype = np.int) for i in range(crossvalcount)]))
-            else:
-                countrylist   = list(self.RegressionDF(shiftdays)['Country'].unique())
-                crossvalcount = len(countrylist)
-                samples       = np.concatenate([i * np.ones(len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == countrylist[i]])) for i in range(crossvalcount)])
-            
-            for xv_index in range(crossvalcount):
-                trainidx      = (samples != xv_index)
-                testidx       = (samples == xv_index)
-                trainmodel    = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[trainidx])
-                testmodel     = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[testidx])
-            
-                trainresults  = trainmodel.fit_regularized(alpha = alpha, L1_wt = 1)
-
-                test_params   = []
-                for paramname in testmodel.exog_names:
-                    if paramname in trainresults.params.keys():
-                        test_params.append(trainresults.params[paramname])
-                    else:
-                        test_params.append(0)
-
-                obs_train     = np.array(trainmodel.endog)
-                obs_test      = np.array(testmodel.endog)
-                pred_train    = trainmodel.predict(trainresults.params)
-                pred_test     = testmodel.predict(test_params)
-                    
-                # store results in dict
-                result_dict                     = {'shiftdays': shiftdays, 'alpha': alpha}
-                if countrywise_crossvalidation:
-                    result_dict['Iteration']    = countrylist[xv_index]
-                else:
-                    result_dict['Iteration']    = xv_index
-                result_dict['Loglike Training'] = trainmodel.loglike(trainresults.params)
-                result_dict['Loglike Test']     = testmodel.loglike(np.array(test_params))
-                result_dict['R2 Training']      = 1 - np.sum((obs_train - pred_train)**2)/np.sum((obs_train - np.mean(obs_train))**2)
-                result_dict['R2 Test']          = 1 - np.sum((obs_test - pred_test)**2)/np.sum((obs_test - np.mean(obs_test))**2)
-                result_dict['RSS Training']     = np.sum((obs_train - pred_train)**2)
-                result_dict['RSS Test']         = np.sum((obs_test - pred_test)**2)
-
-                result_dict.update({k:v for k,v in trainresults.params.items()})
-                
-                # append dict to df
-                if self.__CVresults is None:
-                    self.__CVresults = pd.DataFrame({k:np.array([v]) for k,v in result_dict.items()})
-                else:
-                    self.__CVresults = self.__CVresults.append(result_dict, ignore_index = True)
+            curResDF         = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, countrywise_crossvalidation = countrywise_crossvalidation, crossvalcount = crossvalcount, outputheader = outputheader)
+            self.__CVresults = self.addDF(self.__CVresults,curResDF)
             
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, datetime.datetime.now().strftime('%H:%M:%S')))
             
 
-    def StoreResults(self, store_file = None, reset = False):
-        try:        self.__CVresults.to_csv(store_file)
+
+    def SaveCVResults(self, filename = None, reset = False):
+        try:        self.__CVresults.to_csv(filename)
         except:     pass
         if reset:   self.__CVresults = None
+
+
+
+    def LoadCVResults(self, filename, reset = True):
+        if reset:   self.__CVresults = pd.read(filename)
+        else:       self.__CVresults = self.addDF(pd.read(filename))
+
+
+
+    def ComputeFinalModels(self, modelparameters = [(6,1e-3)]):
+        self.finalModels     = []
+        self.finalResults    = []
+        self.finalCV         = None
+        self.finalParameters = []
+        
+        for i, (shiftdays, alpha) in enumerate(modelparameters):
+            self.finalParameters.append((shiftdays,alpha))
+            
+            finalCV      = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, outputheader = {'modelindex':i})
+            self.finalCV = self.addDF(self.finalCV, finalCV)
+            
+            measurelist  = list(self.RegressionDF(shiftdays).columns)
+            measurelist.remove('Observable')
+            measurelist.remove('Country')
+            formula      = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
+            
+            self.finalModels.append(smf.ols(data = self.RegressionDF(shiftdays), formula = formula))
+            self.finalResults.append(self.finalModels[i].fit_regularized(alpha = alpha, L1_wt = 1))
+            
+
+
+    def PlotTrajectories(self, filename = 'trajectories.pdf'):
+        modelcount  = len(self.finalModels)
+        if modelcount > 0:
+            countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
+            ycount = len(countrylist) // 2 + len(countrylist) % 2
+            
+            fig,axes = plt.subplots(ycount, 2, figsize = (15,3*ycount))
+            ax = axes.flatten()
+            for j,country in enumerate(countrylist):
+                for m,(model,results) in enumerate(zip(self.finalModels,self.finalResults)):
+                    country_mask = np.array(self.RegressionDF(self.finalParameters[m][0])['Country'] == country)
+                    if m == 0:
+                        ax[j].plot(model.endog[country_mask], lw = 5, label = 'data')
+                    ax[j].plot(results.predict()[country_mask], lw = 2, linestyle = '--', label = '({:d}, {:.2f})'.format(self.finalParameters[m][0],np.log10(self.finalParameters[m][1])))
+                ax[j].annotate(country,[5,0.45], ha = 'left', fontsize = 15)
+                ax[j].set_ylim([0,0.5])
+                ax[j].set_xlim([0,60])
+                ax[j].legend()
+            fig.tight_layout()
+            fig.savefig(filename)
+        
+
+
+    def addDF(self, df = None, new = None):
+        if not new is None:
+            if df is None:
+                return new
+            else:
+                return pd.concat([df,new], ignore_index = True, sort = False)
+        else:
+            return df
+    
 
         
     def __getattr__(self,key):
         if key == 'CVresults':
             return self.__CVresults
 
+
+
+    # make CrossValidation object pickleable ...
+    # (getstate, setstate) interacts with (pickle.dump, pickle.load)
+    def __getstate__(self):
+        return {'kwargs':          self.__kwargs_for_pickle,
+                'CVresults':       self.__CVresults,
+                'finalModels':     self.finalModels,
+                'finalResults':    self.finalResults,
+                'finalCV':         self.finalCV,
+                'finalParameters': self.finalParameters}
+    
+    def __setstate__(self,state):
+        self.__init__(**state['kwargs'])
+        self.__CVresults      = state['CVresults']
+        self.finalModels      = state['finalModels']
+        self.finalResults     = state['finalResults']
+        self.finalCV          = state['finalCV']
+        self.finalParameters  = state['finalParameters']
+                
