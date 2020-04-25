@@ -369,9 +369,12 @@ class CrossValidation(object):
             else:
                 ax.annotate(label, [l2_pos,ypos-.1], c = color, weight = 'bold')
 
-        finalCVrelative = self.finalCV[self.finalCV.columns[10:]].divide(self.finalCV['Intercept'],axis = 0).apply(['mean','std'],axis = 0).T
+        finalCVrelative = self.finalCV[self.finalCV.columns[10:]].divide(self.finalCV['Intercept'],axis = 0).quantile([.5,.025,.975]).T
 
+        
         averaged_beta = finalCVrelative.loc[list(modelDF.index),:]
+        #print(finalCVrelative)
+        averaged_beta.columns = ['mean','low','high']
         averaged_beta.sort_values(by = 'mean', axis = 0, inplace = True,ascending = False)
 
         betascaling = 10/3.
@@ -380,7 +383,8 @@ class CrossValidation(object):
             #print(index)
             if index in inverse_mld.keys():
                 plotbox(ax,ypos = j,label = inverse_mld[index][1], color = measurecolors[inverse_mld[index][0]])
-                ax.errorbar(np.array([averaged_beta['mean'][index]])*betascaling,[j],xerr=2*np.array([averaged_beta['std'][index]])*betascaling, c = measurecolors[inverse_mld[index][0]], marker = 'D')
+                ax.plot(averaged_beta['mean'][index]*betascaling,[j], c = measurecolors[inverse_mld[index][0]], marker = 'D')
+                ax.plot([betascaling*averaged_beta['low'][index],betascaling*averaged_beta['high'][index]],[j,j], c = measurecolors[inverse_mld[index][0]], lw = 3)
 
         ax.set_xlim([-3.1,1.2])
 
