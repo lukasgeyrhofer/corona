@@ -184,6 +184,29 @@ class CrossValidation(object):
 
 
 
+    def ProcessCVdata(self, CVresults = None):
+        if CVresults is None: CVresults = self.__CVresults
+        CVresults =  CVresults.groupby(['shiftdays','alpha'], as_index = False).agg(
+            { 'Loglike Test':['mean','std'],
+              'Loglike Training':['mean','std'],
+              'R2 Test': ['mean','std'],
+              'R2 Training': ['mean','std'],
+              'RSS Training' : ['sum'],
+              'RSS Test': ['sum']
+            })
+        CVresults.columns = [ 'shiftdays','alpha',
+                              'Loglike Test','Loglike Test Std',
+                              'Loglike Training','Loglike Training Std',
+                              'R2 Test','R2 Test Std',
+                              'R2 Training','R2 Training Std',
+                              'RSS Training Sum',
+                              'RSS Test Sum'
+                            ]
+        CVresults.sort_values(by = ['shiftdays','alpha'], inplace = True)
+        return CVresults
+
+
+
     def ComputeFinalModels(self, modelparameters = [(6,1e-3)]):
         self.finalModels     = []
         self.finalResults    = []
