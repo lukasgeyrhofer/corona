@@ -176,7 +176,7 @@ class COVID19_measures(object):
             
             # make new column, which will be grouped below
             if extend_measure_names:
-                countrydata.insert(1, 'MN', np.array(countrydata[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]].agg(' - '.join, axis = 1)), True)
+                countrydata.insert(1, 'MN', np.array(countrydata[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]].agg(' -- '.join, axis = 1)), True)
             else:
                 countrydata.insert(1, 'MN',np.array(countrydata['Measure_L{:d}'.format(measure_level)]), True)
             
