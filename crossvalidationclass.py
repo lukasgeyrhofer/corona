@@ -27,6 +27,7 @@ class CrossValidation(object):
         self.__MinCaseCount    = kwargs.get('MinCases', 30) # start trajectories with at least 30 confirmed cases
         self.__MeasureMinCount = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
         self.__verbose         = kwargs.get('verbose', False)
+        self.__cvres_filename  = kwargs.get('CVResultsFilename',None)
         
         # load data from DB files
         self.jhu_data          = cdc.CoronaData(**kwargs)
@@ -39,6 +40,9 @@ class CrossValidation(object):
         # set up internal storage
         self.__CVresults     = None
         self.__regrDF        = {}
+    
+        if not self.__cvres_filename is None:
+            self.LoadCVResults(filename = self.__cvres_filename)
     
         self.__kwargs_for_pickle = kwargs
     
@@ -172,19 +176,23 @@ class CrossValidation(object):
 
 
     def SaveCVResults(self, filename = None, reset = False):
-        try:        self.__CVresults.to_csv(filename)
-        except:     pass
+        if (not filename is None) and (not self.__CVresults is None):
+            self.__CVresults.to_csv(filename)
+            if self.__verbose: print('# saving CV results as "{}"'.format(filename))
         if reset:   self.__CVresults = None
 
 
 
     def LoadCVResults(self, filename, reset = True):
-        if reset:   self.__CVresults = pd.read(filename)
-        else:       self.__CVresults = self.addDF(pd.read(filename))
+        if os.path.exists(filename):
+            if self.__verbose:print('# loading CV results from "{}"'.format(filename))
+            if reset:   self.__CVresults = pd.read_csv(filename)
+            else:       self.__CVresults = self.addDF(pd.read_csv(filename))
+        else:
+            raise IOError
 
 
-
-    def ProcessCVdata(self, CVresults = None):
+    def ProcessCVresults(self, CVresults = None):
         if CVresults is None: CVresults = self.__CVresults
         CVresults =  CVresults.groupby(['shiftdays','alpha'], as_index = False).agg(
             { 'Loglike Test':['mean','std'],
@@ -250,7 +258,39 @@ class CrossValidation(object):
             fig.tight_layout()
             fig.savefig(filename)
        
-       
+    
+    
+    def PlotCVresults(self, filename = 'CVresults.pdf'):
+        processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
+        
+        fig,axes = plt.subplots(2,2,figsize = (20,20))
+        ax = axes.flatten()
+        
+        shiftdaylist = list(processedCV['shiftdays'].unique())
+        shiftdaylist.sort()
+        
+        for shiftdays in shiftdaylist:
+            s_index = (processedCV['shiftdays'] == shiftdays).values
+            alphalist = processedCV[s_index]['alpha']
+            ax[0].plot(alphalist, processedCV[s_index]['Loglike Test'],     label = 's = {}'.format(shiftdays))
+            ax[1].plot(alphalist, processedCV[s_index]['Loglike Training'], label = 's = {}'.format(shiftdays))
+            ax[2].plot(alphalist, processedCV[s_index]['RSS Test Sum'],     label = 's = {}'.format(shiftdays))
+            ax[3].plot(alphalist, processedCV[s_index]['RSS Training Sum'],    label = 's = {}'.format(shiftdays))
+        
+        for i in range(4):
+            ax[i].legend()
+            ax[i].set_xlabel(r'Penalty parameter $\alpha$')
+            ax[i].set_xscale('log')
+        
+        ax[0].set_ylabel('Log Likelihood Test')
+        ax[1].set_ylabel('Log Likelihood Training')
+        ax[2].set_ylabel('RSS Test (sum)')
+        ax[3].set_ylabel('RSS Training (sum)')
+        
+        fig.tight_layout()
+        fig.savefig(filename)
+    
+    
 
     def PlotMeasureListValues(self, filename = 'measurelist_values.pdf'):
         def significanceColor(beta):
