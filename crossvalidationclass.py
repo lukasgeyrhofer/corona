@@ -101,7 +101,7 @@ class CrossValidation(object):
     
     
     
-    def SingleParamCV(self, shiftdays = None, alpha = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}):
+    def SingleParamCV(self, shiftdays = None, alpha = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}, L1_wt = 1):
         
         curResDF          = None
         measurelist       = list(self.RegressionDF(shiftdays).columns)
@@ -127,7 +127,7 @@ class CrossValidation(object):
             trainmodel    = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[trainidx])
             testmodel     = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[testidx])
         
-            trainresults  = trainmodel.fit_regularized(alpha = alpha, L1_wt = 1)
+            trainresults  = trainmodel.fit_regularized(alpha = alpha, L1_wt = L1_wt)
 
             test_params   = []
             for paramname in testmodel.exog_names:
@@ -162,13 +162,15 @@ class CrossValidation(object):
     
     
         
-    def RunCV(self, shiftdaylist = [0], alphalist = [1e-5], verbose = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}):
+    def RunCV(self, shiftdaylist = [0], alphalist = [1e-5], verbose = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}, L1_wt = 1):
         if verbose is None: verbose = self.__verbose
-        
+        if L1_wt != 1:
+            outputheader.update({'L1_wt':L1_wt})
+            
         for shiftdays, alpha in itertools.product(shiftdaylist,alphalist):
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, 'computing'), end = '\r', flush = True)
             
-            curResDF         = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, countrywise_crossvalidation = countrywise_crossvalidation, crossvalcount = crossvalcount, outputheader = outputheader)
+            curResDF         = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, countrywise_crossvalidation = countrywise_crossvalidation, crossvalcount = crossvalcount, outputheader = outputheader, L1_wt = L1_wt)
             self.__CVresults = self.addDF(self.__CVresults,curResDF)
             
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, datetime.datetime.now().strftime('%H:%M:%S')))
@@ -215,7 +217,7 @@ class CrossValidation(object):
 
 
 
-    def ComputeFinalModels(self, modelparameters = [(6,1e-3)]):
+    def ComputeFinalModels(self, modelparameters = [(6,1e-3)], L1_wt = 1):
         self.finalModels     = []
         self.finalResults    = []
         self.finalCV         = None
@@ -233,7 +235,7 @@ class CrossValidation(object):
             formula      = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
             
             self.finalModels.append(smf.ols(data = self.RegressionDF(shiftdays), formula = formula))
-            self.finalResults.append(self.finalModels[i].fit_regularized(alpha = alpha, L1_wt = 1))
+            self.finalResults.append(self.finalModels[i].fit_regularized(alpha = alpha, L1_wt = L1_wt))
             
 
 
