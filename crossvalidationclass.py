@@ -6,6 +6,7 @@ import os
 import itertools
 import datetime
 import time
+import textwrap
 
 # plotting
 import matplotlib
@@ -388,103 +389,63 @@ class CrossValidation(object):
         fig.savefig(filename)
         
 
+
+    def GetMeasureEffects(self, drop_zeros = False, rescale = True):
+        if not self.finalCV is None:
+            finalCVrelative                = self.finalCV[self.finalCV.columns[10:]]
+            if rescale: finalCVrelative    = finalCVrelative.divide(self.finalCV['Intercept'],axis = 0)
+            finalCVrelative                = finalCVrelative.quantile([.5,.025,.975]).T
+            finalCVrelative.columns        = ['median', 'low', 'high']            
+            if drop_zeros: finalCVrelative = finalCVrelative[(finalCVrelative['median'] != 0) | (finalCVrelative['low'] != 0) | (finalCVrelative['high'] != 0)]
+            fCV_withNames                  = self.measure_data.GetMeasureNames().merge(finalCVrelative, how = 'inner', left_index = True, right_index = True)
+            fCV_withNames.sort_values(by   = ['median','high'], inplace = True)
+            
+            return fCV_withNames
+        else:
+            return None
+
+
         
     def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30)):
-        def modelname(index):
-            return 'm{} ({},{})'.format(index,self.finalParameters[index][0],self.finalParameters[index][1])
-
-        # collect measure names for labels
-        measurelist = self.measure_data.MeasureList(extend_measure_names = True, measure_level = 2)
-        countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
-        modelcount  = len(self.finalModels)
-        intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
-        
-        
-        # convert shortened measure names backward
-        measure_level_dict = {}
-        for mn in measurelist.keys():
-            l1,l2 = mn.split(' -- ')
-            if not l1 in measure_level_dict.keys():
-                measure_level_dict[l1] = {}
-            measure_level_dict[l1][l2] = self.measure_data.CleanUpMeasureName(l2)
-        L1names = list(measure_level_dict.keys())
-        L1names.sort()
-
-        colornames    = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
-        measurecolors = {l1:col for l1,col in zip(measure_level_dict.keys(),colornames)}
-        measurecolors['Returning to normal life'] = '#eeff00'
-
-        inverse_mld   = {}
-        for l1 in measure_level_dict.keys():
-            for l2 in measure_level_dict[l1].keys():
-                inverse_mld[measure_level_dict[l1][l2]] = (l1,l2)
-
-        modelDF       = pd.DataFrame(columns=[modelname(m) for m in range(modelcount)])
-
-        allparamnames = list(set([mn for m in range(modelcount) for mn in self.finalResults[m].params.keys() if mn[:3] != 'C(C']))
-        allparamnames.remove('Intercept')
-
-        for paramname in allparamnames:
-            paramvaluedict = {}
-            for m in range(modelcount):
-                paramvaluedict[modelname(m)] = float(self.finalResults[m].params[paramname]/intercept[m])
-            modelDF.loc[paramname] = paramvaluedict
-            
-        modelDF['average'] = modelDF.mean(numeric_only = True, axis = 1)
-        modelDF.sort_values(by = 'average', inplace = True, ascending = False)
-
-        l1_pos = -3
-        l2_pos = -2.5
-
-        def plotbox(ax, ypos = 1, label = '', color = '#ffffff', boxalpha = .2, header = False):
-            background = plt.Rectangle([l2_pos - .05, ypos - .4], -l2_pos + 1.05, .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
+        l1_pos      = -120
+        l2_pos      = -80
+        blacklines  = [-30,-20,-10,0,10]
+        graylines   = []
+        border      = 2
+        def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, columns = (None,None), textlen = 40):
+            ax.plot(values['median'],[ypos], c = measurecolors[values[columns[0]]], marker = 'D')
+            ax.plot([values['low'],values['high']],[ypos,ypos], c = measurecolors[values[columns[0]]], lw = 2)
+            background = plt.Rectangle([1e-2 * (l1_pos - border), ypos - .4], 1e-2*(-l1_pos + np.max(blacklines + graylines)+border), .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
             ax.add_patch(background)
-            if not header:
-                ax.annotate(label, [l2_pos,ypos-.1])
-            else:
-                ax.annotate(label, [l2_pos,ypos-.1], c = color, weight = 'bold')
+            ax.annotate(textwrap.shorten(values[columns[0]], width = textlen), [1e-2*l1_pos,ypos-.1])
+            if columns[0] != columns[1]: ax.annotate(textwrap.shorten(values[columns[1]], width = textlen), [1e-2*l2_pos,ypos-.1])
 
-        finalCVrelative = self.finalCV[self.finalCV.columns[10:]].divide(self.finalCV['Intercept'],axis = 0).quantile([.5,.025,.975]).T
+        measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros)
+        if len(measure_effects.columns) >= 5:
+            headerkey, labelkey = measure_effects.columns[[0,-4]]
+        else:
+            headerkey = labelkey = measure_effects.columns[0]
+            
+        colornames      = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
+        colornames      = [cn for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
+        measurecolors   = {l1:colornames[i] for i,l1 in enumerate(measure_effects[headerkey].unique())}
 
         
-        averaged_beta = finalCVrelative.loc[list(modelDF.index),:]
-        #print(finalCVrelative)
-        averaged_beta.columns = ['mean','low','high']
-        averaged_beta.sort_values(by = ['mean','high'], axis = 0, inplace = True,ascending = False)
-
-        betascaling = 10/3.
         fig,ax = plt.subplots(figsize = figsize)
-        j=0
-        for index,values in averaged_beta.iterrows():
-            #print(values)
-            if index in inverse_mld.keys():
-                if not (drop_zeros and values['mean'] == values['low'] == values['high'] == 0):
-                    plotbox(ax,ypos = j,label = inverse_mld[index][1], color = measurecolors[inverse_mld[index][0]])
-                    ax.plot(values['mean']*betascaling,[j], c = measurecolors[inverse_mld[index][0]], marker = 'D')
-                    ax.plot([betascaling*values['low'],betascaling*values['high']],[j,j], c = measurecolors[inverse_mld[index][0]], lw = 3)
-                    j+=1
 
-        ax.set_xlim([-3.1,1.2])
-
-        for o,vertline in enumerate(np.arange(10)*betascaling/10.):
-            if vertline != 0 and -1 <= vertline  <= 1:
-                ax.plot([vertline,vertline],[-.7,j+.7],c = 'lightgray',zorder = -3,lw =1)
-                ax.plot([-vertline,-vertline],[-.7,j+.7],c = 'lightgray',zorder = -3,lw =1)
-                ax.annotate('-{:d}%'.format(o*10),[-vertline,j+1.5],fontsize = 12,c='gray',ha='center')
-                ax.annotate('{:d}%'.format(o*10),[vertline,j+1.5],fontsize = 12,c='gray',ha='center')
-        ax.plot([-1,-1],[-1,j+1], lw = 2, c = 'black',zorder = -2)
-        ax.plot([0,0],[-1,j+1], lw = 2, c = 'black', zorder = -2)
-        ax.plot([1,1],[-1,j+1], lw = 2, c = 'black', zorder = -2)
-        ax.annotate('0%',[0,j+1.5],fontsize = 12, c='gray',ha='center')
-
-        for k,l1 in enumerate(sorted(measure_level_dict.keys())[::-1]):
-            plotbox(ax,ypos = -k - 2, label = l1, color = measurecolors[l1], header = True)
-
-        ax.set_ylim([-3-k,j+2])
-            
+        for j,(index,values) in enumerate(measure_effects.iterrows()):
+            PlotRow(ax, ypos = -j,values = values, color = measurecolors[values['Measure_L1']], columns = (headerkey, labelkey))
+        for x in blacklines:
+            ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
+            ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
+        for x in graylines:
+            ax.plot([1e-2 * x,1e-2 * x],[0.6,-j-0.4], lw = 1, c = 'gray',zorder = -2)
+            ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
+        
+        ax.set_xlim([1e-2 * (l1_pos - border), 1e-2 * (blacklines[-1]+0.5*border)])
+        ax.set_ylim([-j-2,1.6])
         ax.axis('off')
         fig.savefig(filename)
-
 
 
 
