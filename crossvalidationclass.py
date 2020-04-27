@@ -239,13 +239,15 @@ class CrossValidation(object):
             
 
 
-    def PlotTrajectories(self, filename = 'trajectories.pdf'):
+    def PlotTrajectories(self, filename = 'trajectories.pdf', columns = 2):
         modelcount  = len(self.finalModels)
         if modelcount > 0:
             countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
-            ycount = len(countrylist) // 2 + len(countrylist) % 2
+            ycount = len(countrylist) // columns
+            if len(countrylist) % columns != 0:
+                ycount += 1
             
-            fig,axes = plt.subplots(ycount, 2, figsize = (15,3*ycount))
+            fig,axes = plt.subplots(ycount, columns, figsize = (15,6.*ycount/columns))
             ax = axes.flatten()
             for j,country in enumerate(countrylist):
                 for m,(model,results) in enumerate(zip(self.finalModels,self.finalResults)):
@@ -262,32 +264,40 @@ class CrossValidation(object):
        
     
     
-    def PlotCVresults(self, filename = 'CVresults.pdf'):
+    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None):
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
+        totalrescale = 1./(len(self.__CVresults['Iteration'].unique()) - 1)
         
-        fig,axes = plt.subplots(2,2,figsize = (20,20))
+        
+        fig,axes = plt.subplots(1,2,figsize = (15,6), sharey = True)
         ax = axes.flatten()
         
-        shiftdaylist = list(processedCV['shiftdays'].unique())
+        shiftdaylist = np.array(processedCV['shiftdays'].unique(), dtype = np.int)
         shiftdaylist.sort()
         
-        for shiftdays in shiftdaylist:
-            s_index = (processedCV['shiftdays'] == shiftdays).values
-            alphalist = processedCV[s_index]['alpha']
-            ax[0].plot(alphalist, processedCV[s_index]['Loglike Test'],     label = 's = {}'.format(shiftdays))
-            ax[1].plot(alphalist, processedCV[s_index]['Loglike Training'], label = 's = {}'.format(shiftdays))
-            ax[2].plot(alphalist, processedCV[s_index]['RSS Test Sum'],     label = 's = {}'.format(shiftdays))
-            ax[3].plot(alphalist, processedCV[s_index]['RSS Training Sum'],    label = 's = {}'.format(shiftdays))
+        if shiftdayrestriction is None:
+            shiftdayrestriction = shiftdaylist
         
-        for i in range(4):
+        for shiftdays in shiftdaylist:
+            if shiftdays in shiftdayrestriction:
+                s_index = (processedCV['shiftdays'] == shiftdays).values
+                alphalist = processedCV[s_index]['alpha']
+                #ax[0].plot(alphalist, processedCV[s_index]['Loglike Test'],     label = 's = {}'.format(shiftdays))
+                #ax[1].plot(alphalist, processedCV[s_index]['Loglike Training'], label = 's = {}'.format(shiftdays))
+                ax[0].plot(alphalist, processedCV[s_index]['RSS Test Sum'],     label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+                ax[1].plot(alphalist, processedCV[s_index]['RSS Training Sum']*totalrescale,    label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+        
+        for i in range(2):
             ax[i].legend()
             ax[i].set_xlabel(r'Penalty parameter $\alpha$')
             ax[i].set_xscale('log')
+            ax[i].grid()
+        ax[0].set_ylim([0,50])
         
-        ax[0].set_ylabel('Log Likelihood Test')
-        ax[1].set_ylabel('Log Likelihood Training')
-        ax[2].set_ylabel('RSS Test (sum)')
-        ax[3].set_ylabel('RSS Training (sum)')
+        #ax[0].set_ylabel('Log Likelihood Test')
+        #ax[1].set_ylabel('Log Likelihood Training')
+        ax[0].set_ylabel('RSS Test (sum over crossval)')
+        ax[1].set_ylabel('RSS Training (sum over crossval)')
         
         fig.tight_layout()
         fig.savefig(filename)
@@ -312,7 +322,7 @@ class CrossValidation(object):
         # convert shortened measure names backward
         measure_level_dict = {}
         for mn in measurelist.keys():
-            l1,l2 = mn.split(' - ')
+            l1,l2 = mn.split(' -- ')
             if not l1 in measure_level_dict.keys():
                 measure_level_dict[l1] = {}
             measure_level_dict[l1][l2] = self.measure_data.CleanUpMeasureName(l2)
@@ -379,7 +389,7 @@ class CrossValidation(object):
         
 
         
-    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf'):
+    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30)):
         def modelname(index):
             return 'm{} ({},{})'.format(index,self.finalParameters[index][0],self.finalParameters[index][1])
 
@@ -440,16 +450,19 @@ class CrossValidation(object):
         averaged_beta = finalCVrelative.loc[list(modelDF.index),:]
         #print(finalCVrelative)
         averaged_beta.columns = ['mean','low','high']
-        averaged_beta.sort_values(by = 'mean', axis = 0, inplace = True,ascending = False)
+        averaged_beta.sort_values(by = ['mean','high'], axis = 0, inplace = True,ascending = False)
 
         betascaling = 10/3.
-        fig,ax = plt.subplots(figsize = (15,30))
-        for j,(index,values) in enumerate(averaged_beta.iterrows()):
-            #print(index)
+        fig,ax = plt.subplots(figsize = figsize)
+        j=0
+        for index,values in averaged_beta.iterrows():
+            #print(values)
             if index in inverse_mld.keys():
-                plotbox(ax,ypos = j,label = inverse_mld[index][1], color = measurecolors[inverse_mld[index][0]])
-                ax.plot(averaged_beta['mean'][index]*betascaling,[j], c = measurecolors[inverse_mld[index][0]], marker = 'D')
-                ax.plot([betascaling*averaged_beta['low'][index],betascaling*averaged_beta['high'][index]],[j,j], c = measurecolors[inverse_mld[index][0]], lw = 3)
+                if not (drop_zeros and values['mean'] == values['low'] == values['high'] == 0):
+                    plotbox(ax,ypos = j,label = inverse_mld[index][1], color = measurecolors[inverse_mld[index][0]])
+                    ax.plot(values['mean']*betascaling,[j], c = measurecolors[inverse_mld[index][0]], marker = 'D')
+                    ax.plot([betascaling*values['low'],betascaling*values['high']],[j,j], c = measurecolors[inverse_mld[index][0]], lw = 3)
+                    j+=1
 
         ax.set_xlim([-3.1,1.2])
 
@@ -465,9 +478,9 @@ class CrossValidation(object):
         ax.annotate('0%',[0,j+1.5],fontsize = 12, c='gray',ha='center')
 
         for k,l1 in enumerate(sorted(measure_level_dict.keys())[::-1]):
-            plotbox(ax,ypos = j + k + 3, label = l1, color = measurecolors[l1], header = True)
+            plotbox(ax,ypos = -k - 2, label = l1, color = measurecolors[l1], header = True)
 
-        ax.set_ylim([-2,j+k+4])
+        ax.set_ylim([-3-k,j+2])
             
         ax.axis('off')
         fig.savefig(filename)
