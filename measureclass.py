@@ -92,13 +92,16 @@ class COVID19_measures(object):
             raise NotImplementedError
 
 
+
     def DownloadData(self):
         tmpdata = pd.read_csv(self.__datasourceinfo[self.__datasource]['DownloadURL'],**self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
         tmpdata.to_csv(self.__datasourceinfo[self.__datasource]['DatafileName'])
 
+
     
     def convertDate(self,datestr):
         return datetime.datetime.strptime(str(datestr),self.__datasourceinfo[self.__datasource]['dateformat']).strftime(self.__dateformat)
+
 
     
     def ReadData(self):
@@ -138,10 +141,12 @@ class COVID19_measures(object):
             NotImplementedError
             
     
+    
     def RemoveCountry(self, country = None):
         if country in self.__countrylist:
             self.__removedcountries.append(country)
             self.__countrylist.remove(country)
+    
     
     
     def RenameCountry(self, country = None, newname = None):
@@ -152,10 +157,12 @@ class COVID19_measures(object):
             self.__data.replace(to_replace = country, value = newname, inplace = True)
     
     
+    
     def SortDates(self,datelist):
         tmp_datelist = list(datelist[:])
         tmp_datelist.sort(key = lambda x:datetime.datetime.strptime(x,self.__dateformat))
         return tmp_datelist
+    
     
     
     def CountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
@@ -197,9 +204,11 @@ class COVID19_measures(object):
             return None
     
     
+    
     def RawData(self,country):
         if country in self.__countrylist:
                 return self.__data[self.__data[self.__countrycolumn] == country].reset_index()
+    
     
 
     def date2vector(self, implementdate, start = '22/1/2020', end = None, shiftdays = 0, maxlen = None, datefmt = '%d/%m/%Y'):
@@ -223,9 +232,12 @@ class COVID19_measures(object):
         return vec
 
 
+
     def CleanUpMeasureName(self, measurename = '', clean_up = True):
-        if clean_up:    return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('-',' ').replace('_',' ').split(' ')])
-        else:           return measurename
+        if isinstance(measurename,str) and clean_up:
+                return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('-',' ').replace('_',' ').split(' ')])
+        return measurename
+
 
 
     def ImplementationTable(self, country, measure_level = None, startdate = '22/1/20', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = False):
@@ -237,6 +249,7 @@ class COVID19_measures(object):
                                     } )
         else:
             return None
+
     
     
     def MeasureList(self, countrylist = None, measure_level = None, mincount = None, extend_measure_names = None, clean_measurename = False):
@@ -256,6 +269,7 @@ class COVID19_measures(object):
         return measurelist
     
     
+    
     def FindMeasure(self, country, measure_name, measure_level):
         cd = self.CountryData(country, measure_level = measure_level)
         if measure_name in cd.keys():
@@ -264,12 +278,25 @@ class COVID19_measures(object):
             return None
     
     
+    def GetMeasureNames(self, measure_level = None, cleaned_measurelist = None):
+        if measure_level is None: measure_level = self.__measurelevel
+        if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']: measure_level = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
+
+        measurenameDF = pd.DataFrame(self.__data[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]]).replace(np.nan,'',regex=True)
+        measurenameDF.index = list(self.__data['Measure_L{}'.format(measure_level)].apply(self.CleanUpMeasureName))
+        measurenameDF.columns = ['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]
+        measurenameDF.drop_duplicates(inplace = True)
+
+        return measurenameDF
+    
+    
     def __getattr__(self,key):
         if key in self.__countrylist:
             return self.CountryData(country = key)
         elif key == 'countrylist':
             return self.__countrylist
-        
+    
+    
     
     def __iter__(self):
         for country in self.__countrylist:
