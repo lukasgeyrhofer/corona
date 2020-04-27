@@ -407,34 +407,36 @@ class CrossValidation(object):
 
         
     def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30)):
-        l1_pos      = -120
-        l2_pos      = -80
-        blacklines  = [-30,-20,-10,0,10]
-        graylines   = []
-        border      = 2
-        def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, columns = (None,None), textlen = 40):
-            ax.plot(values['median'],[ypos], c = measurecolors[values[columns[0]]], marker = 'D')
-            ax.plot([values['low'],values['high']],[ypos,ypos], c = measurecolors[values[columns[0]]], lw = 2)
-            background = plt.Rectangle([1e-2 * (l1_pos - border), ypos - .4], 1e-2*(-l1_pos + np.max(blacklines + graylines)+border), .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
-            ax.add_patch(background)
-            ax.annotate(textwrap.shorten(values[columns[0]], width = textlen), [1e-2*l1_pos,ypos-.1])
-            if columns[0] != columns[1]: ax.annotate(textwrap.shorten(values[columns[1]], width = textlen), [1e-2*l2_pos,ypos-.1])
+        # define plot sizes in %
+        labelsize    = 40
+        blacklines   = [-30,-20,-10,0,10]
+        graylines    = []
+        border       = 2
+        
+        # get plotting area
+        minplot      = np.min(blacklines + graylines)
+        maxplot      = np.max(blacklines + graylines)
 
+        # function to plot one row in DF
+        def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, textlen = 40):
+            count_labels = len(values) - 3
+            ax.plot(values['median'],[ypos], c = measurecolors[values[0]], marker = 'D')
+            ax.plot([values['low'],values['high']],[ypos,ypos], c = measurecolors[values[0]], lw = 2)
+            background = plt.Rectangle([1e-2 * (minplot - border - count_labels * labelsize), ypos - .4], 1e-2*(count_labels*labelsize + maxplot + border - minplot), .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
+            ax.add_patch(background)
+            for i in range(count_labels):
+                ax.annotate(textwrap.shorten(values[i], width = textlen), [1e-2*(minplot - (count_labels - i) * labelsize), ypos - .1])
+
+        # setup
         measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros)
-        if len(measure_effects.columns) >= 5:
-            headerkey, labelkey = measure_effects.columns[[0,-4]]
-        else:
-            headerkey = labelkey = measure_effects.columns[0]
-            
         colornames      = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
         colornames      = [cn for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
-        measurecolors   = {l1:colornames[i] for i,l1 in enumerate(measure_effects[headerkey].unique())}
-
+        measurecolors   = {l1:colornames[i] for i,l1 in enumerate(measure_effects[measure_effects.columns[0]].unique())}
         
+        # actual plotting including vertical lines
         fig,ax = plt.subplots(figsize = figsize)
-
         for j,(index,values) in enumerate(measure_effects.iterrows()):
-            PlotRow(ax, ypos = -j,values = values, color = measurecolors[values['Measure_L1']], columns = (headerkey, labelkey))
+            PlotRow(ax, ypos = -j,values = values, color = measurecolors[values['Measure_L1']])
         for x in blacklines:
             ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
             ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
@@ -442,7 +444,8 @@ class CrossValidation(object):
             ax.plot([1e-2 * x,1e-2 * x],[0.6,-j-0.4], lw = 1, c = 'gray',zorder = -2)
             ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
         
-        ax.set_xlim([1e-2 * (l1_pos - border), 1e-2 * (blacklines[-1]+0.5*border)])
+        # format output
+        ax.set_xlim([1e-2 * (-(len(measure_effects.columns) -3) * labelsize - 2*border + minplot), 1e-2 * (maxplot+border)])
         ax.set_ylim([-j-2,1.6])
         ax.axis('off')
         fig.savefig(filename)
