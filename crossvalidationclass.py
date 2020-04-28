@@ -451,7 +451,7 @@ class CrossValidation(object):
         measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros)
         colornames      = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
         colornames      = [cn for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
-        measurecolors   = {l1:colornames[i] for i,l1 in enumerate(measure_effects[measure_effects.columns[0]].unique())}
+        measurecolors   = {l1:colornames[i % len(colornames)] for i,l1 in enumerate(measure_effects[measure_effects.columns[0]].unique())}
         
         # actual plotting including vertical lines
         fig,ax = plt.subplots(figsize = figsize)
