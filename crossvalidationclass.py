@@ -25,10 +25,12 @@ import measureclass as mc
 
 class CrossValidation(object):
     def __init__(self, **kwargs):
-        self.__MinCaseCount    = kwargs.get('MinCases', 30) # start trajectories with at least 30 confirmed cases
-        self.__MeasureMinCount = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
-        self.__verbose         = kwargs.get('verbose', False)
-        self.__cvres_filename  = kwargs.get('CVResultsFilename',None)
+        self.__MinCaseCount          = kwargs.get('MinCases', 30) # start trajectories with at least 30 confirmed cases
+        self.__MeasureMinCount       = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
+        self.__verbose               = kwargs.get('verbose', False)
+        self.__cvres_filename        = kwargs.get('CVResultsFilename',None)
+        self.__external_regrDF_files = kwargs.get('ExternalRegrDF',{})
+
         
         # load data from DB files
         self.jhu_data          = cdc.CoronaData(**kwargs)
@@ -38,6 +40,15 @@ class CrossValidation(object):
         self.measure_data.RenameCountry('South Korea', 'Korea, South')
         self.measure_data.RenameCountry('Czech Republic', 'Czechia')
         
+        
+        if len(self.__external_regrDF_files) > 0:
+            for shiftday,filename in self.__external_regrDF_files.items():
+                self.__regrDF[shiftday] = pd.read_csv(filename)
+            self.__UseExternalRegrDF = True
+        else:
+            self.__UseExternalRegrDF = False
+        
+        
         # set up internal storage
         self.__CVresults     = None
         self.__regrDF        = {}
@@ -46,7 +57,7 @@ class CrossValidation(object):
             self.LoadCVResults(filename = self.__cvres_filename)
     
         self.__kwargs_for_pickle = kwargs
-    
+        
     
     
     def GenerateRDF(self, shiftdays = 0, countrylist = None):
@@ -97,12 +108,15 @@ class CrossValidation(object):
     
     def RegressionDF(self,shiftdays = 0):
         if not shiftdays in self.__regrDF.keys():
-            self.__regrDF[shiftdays] = self.GenerateRDF(shiftdays = shiftdays)
+            if not self.__UseExternalRegrDF:
+                self.__regrDF[shiftdays] = self.GenerateRDF(shiftdays = shiftdays)
+            else:
+                raise IOError('Did not load external RegrDF for shiftdays = {}'.format(shiftdays))
         return self.__regrDF[shiftdays]
     
     
     
-    def SingleParamCV(self, shiftdays = None, alpha = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}, L1_wt = 1):
+    def SingleParamCV(self, shiftdays = None, alpha = None, crossvalcount = None, outputheader = {}, L1_wt = 1):
         
         curResDF          = None
         measurelist       = list(self.RegressionDF(shiftdays).columns)
@@ -111,18 +125,33 @@ class CrossValidation(object):
         
         formula           = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
         
-        if not countrywise_crossvalidation:
-            # assign samples to each of the crossvalidation chunks
-            datalen       = len(self.RegressionDF(shiftdays))
-            chunklen      = np.ones(crossvalcount,dtype = np.int) * (datalen // crossvalcount)
-            chunklen[:datalen%crossvalcount] += 1
-            samples       = np.random.permutation(np.concatenate([i*np.ones(chunklen[i],dtype = np.int) for i in range(crossvalcount)]))
-        else:
-            countrylist   = list(self.RegressionDF(shiftdays)['Country'].unique())
-            crossvalcount = len(countrylist)
-            samples       = np.concatenate([i * np.ones(len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == countrylist[i]])) for i in range(crossvalcount)])
+        #if not countrywise_crossvalidation:
+            ## assign samples to each of the crossvalidation chunks
+            #datalen       = len(self.RegressionDF(shiftdays))
+            #chunklen      = np.ones(crossvalcount,dtype = np.int) * (datalen // crossvalcount)
+            #chunklen[:datalen%crossvalcount] += 1
+            #samples       = np.random.permutation(np.concatenate([i*np.ones(chunklen[i],dtype = np.int) for i in range(crossvalcount)]))
+        #else:
+            #crossvalcount = len(countrylist)
+            #samples       = np.concatenate([i * np.ones(len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == countrylist[i]])) for i in range(crossvalcount)])
+            
+        countrylist       = list(self.RegressionDF(shiftdays)['Country'].unique())
+        
+        if crossvalcount is None:            crossvalcount = len(countrylist)
+        if crossvalcount > len(countrylist): crossvalcount = len(countrylist)
+            
+        countrylen        = len(countrylist)
+        chunklen          = np.ones(crossvalcount, dtype = np.int) * (countrylen // crossvalcount)
+        chunklen[:countrylen % crossvalcount] += 1
+        # sample_countries should be a list (of the same length as countrylist) with values corresponding to which test group the country is assigned
+        sample_countries  = np.random.permutation(np.concatenate([i * np.ones(chunklen[i],dtype = np.int) for i in range(crossvalcount)]))
+        # extend this list to the whole dataset
+        samples           = np.concatenate([s * np.ones(len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == countrylist[i]]), dtype = np.int) for i,s in enumerate(sample_countries)])
+            
         
         for xv_index in range(crossvalcount):
+            testcountries = [countrylist[i] for i,s in enumerate(sample_countries) if s == xv_index]
+            
             trainidx      = (samples != xv_index)
             testidx       = (samples == xv_index)
             trainmodel    = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[trainidx])
@@ -143,17 +172,16 @@ class CrossValidation(object):
             pred_test     = testmodel.predict(test_params)
                 
             # store results in dict
-            result_dict                     = {'shiftdays': shiftdays, 'alpha': alpha}
-            if countrywise_crossvalidation:
-                result_dict['Iteration']    = countrylist[xv_index]
-            else:
-                result_dict['Iteration']    = xv_index
-            result_dict['Loglike Training'] = trainmodel.loglike(trainresults.params)
-            result_dict['Loglike Test']     = testmodel.loglike(np.array(test_params))
-            result_dict['R2 Training']      = 1 - np.sum((obs_train - pred_train)**2)/np.sum((obs_train - np.mean(obs_train))**2)
-            result_dict['R2 Test']          = 1 - np.sum((obs_test - pred_test)**2)/np.sum((obs_test - np.mean(obs_test))**2)
-            result_dict['RSS Training']     = np.sum((obs_train - pred_train)**2)
-            result_dict['RSS Test']         = np.sum((obs_test - pred_test)**2)
+            result_dict                          = {'shiftdays': shiftdays, 'alpha': alpha}
+            result_dict['Test Countries']        = '; '.join(testcountries)
+            result_dict['Test Sample Size']      = np.sum([len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == country]) for country in testcountries])
+            result_dict['Training Sample Size']  = len(self.RegressionDF(shiftdays)) - result_dict['Test Sample Size']
+            result_dict['Loglike Training']      = trainmodel.loglike(trainresults.params)
+            result_dict['Loglike Test']          = testmodel.loglike(np.array(test_params))
+            result_dict['R2 Training']           = 1 - np.sum((obs_train - pred_train)**2)/np.sum((obs_train - np.mean(obs_train))**2)
+            result_dict['R2 Test']               = 1 - np.sum((obs_test - pred_test)**2)/np.sum((obs_test - np.mean(obs_test))**2)
+            result_dict['RSS Training']          = np.sum((obs_train - pred_train)**2)
+            result_dict['RSS Test']              = np.sum((obs_test - pred_test)**2)
 
             result_dict.update({k:v for k,v in trainresults.params.items()})
             
@@ -163,7 +191,7 @@ class CrossValidation(object):
     
     
         
-    def RunCV(self, shiftdaylist = [0], alphalist = [1e-5], verbose = None, countrywise_crossvalidation = True, crossvalcount = 10, outputheader = {}, L1_wt = 1):
+    def RunCV(self, shiftdaylist = [0], alphalist = [1e-5], verbose = None, crossvalcount = None, outputheader = {}, L1_wt = 1):
         if verbose is None: verbose = self.__verbose
         if L1_wt != 1:
             outputheader.update({'L1_wt':L1_wt})
@@ -171,7 +199,7 @@ class CrossValidation(object):
         for shiftdays, alpha in itertools.product(shiftdaylist,alphalist):
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, 'computing'), end = '\r', flush = True)
             
-            curResDF         = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, countrywise_crossvalidation = countrywise_crossvalidation, crossvalcount = crossvalcount, outputheader = outputheader, L1_wt = L1_wt)
+            curResDF         = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, crossvalcount = crossvalcount, outputheader = outputheader, L1_wt = L1_wt)
             self.__CVresults = self.addDF(self.__CVresults,curResDF)
             
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, datetime.datetime.now().strftime('%H:%M:%S')))
@@ -203,7 +231,9 @@ class CrossValidation(object):
               'R2 Test': ['mean','std'],
               'R2 Training': ['mean','std'],
               'RSS Training' : ['sum'],
-              'RSS Test': ['sum']
+              'RSS Test': ['sum'],
+              'Test Sample Size':['sum'],
+              'Training Sample Size':['sum']
             })
         CVresults.columns = [ 'shiftdays','alpha',
                               'Loglike Test','Loglike Test Std',
@@ -211,7 +241,9 @@ class CrossValidation(object):
                               'R2 Test','R2 Test Std',
                               'R2 Training','R2 Training Std',
                               'RSS Training Sum',
-                              'RSS Test Sum'
+                              'RSS Test Sum',
+                              'Test Sample Size',
+                              'Training Sample Size'
                             ]
         CVresults.sort_values(by = ['shiftdays','alpha'], inplace = True)
         return CVresults
@@ -267,8 +299,6 @@ class CrossValidation(object):
     
     def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None):
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
-        totalrescale = 1./(len(self.__CVresults['Iteration'].unique()) - 1)
-        
         
         fig,axes = plt.subplots(1,2,figsize = (15,6), sharey = True)
         ax = axes.flatten()
@@ -283,20 +313,16 @@ class CrossValidation(object):
             if shiftdays in shiftdayrestriction:
                 s_index = (processedCV['shiftdays'] == shiftdays).values
                 alphalist = processedCV[s_index]['alpha']
-                #ax[0].plot(alphalist, processedCV[s_index]['Loglike Test'],     label = 's = {}'.format(shiftdays))
-                #ax[1].plot(alphalist, processedCV[s_index]['Loglike Training'], label = 's = {}'.format(shiftdays))
-                ax[0].plot(alphalist, processedCV[s_index]['RSS Test Sum'],     label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
-                ax[1].plot(alphalist, processedCV[s_index]['RSS Training Sum']*totalrescale,    label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+                ax[0].plot(alphalist, processedCV[s_index]['RSS Test Sum']/processedCV[s_index]['Test Sample Size'],         label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+                ax[1].plot(alphalist, processedCV[s_index]['RSS Training Sum']/processedCV[s_index]['Training Sample Size'], label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
         
         for i in range(2):
             ax[i].legend()
             ax[i].set_xlabel(r'Penalty parameter $\alpha$')
             ax[i].set_xscale('log')
             ax[i].grid()
-        ax[0].set_ylim([0,50])
+        ax[0].set_ylim([0,.02])
         
-        #ax[0].set_ylabel('Log Likelihood Test')
-        #ax[1].set_ylabel('Log Likelihood Training')
         ax[0].set_ylabel('RSS Test (sum over crossval)')
         ax[1].set_ylabel('RSS Training (sum over crossval)')
         
