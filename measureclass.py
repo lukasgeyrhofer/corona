@@ -313,6 +313,7 @@ class COVID19_measures(object):
             return None
     
     
+    
     def GetMeasureNames(self, measure_level = None, cleaned_measurelist = None):
         if measure_level is None: measure_level = self.__measurelevel
         if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']: measure_level = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
@@ -323,6 +324,7 @@ class COVID19_measures(object):
         measurenameDF.drop_duplicates(inplace = True)
 
         return measurenameDF
+    
     
     
     def __getattr__(self,key):
