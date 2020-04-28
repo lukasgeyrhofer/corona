@@ -406,13 +406,7 @@ class CrossValidation(object):
 
 
         
-    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30)):
-        # define plot sizes in %
-        labelsize    = 40
-        blacklines   = [-30,-20,-10,0,10]
-        graylines    = []
-        border       = 2
-        
+    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [-30,-20,-10,0,10], graylines = [], border = 2):
         # get plotting area
         minplot      = np.min(blacklines + graylines)
         maxplot      = np.max(blacklines + graylines)
@@ -436,7 +430,7 @@ class CrossValidation(object):
         # actual plotting including vertical lines
         fig,ax = plt.subplots(figsize = figsize)
         for j,(index,values) in enumerate(measure_effects.iterrows()):
-            PlotRow(ax, ypos = -j,values = values, color = measurecolors[values['Measure_L1']])
+            PlotRow(ax, ypos = -j,values = values, color = measurecolors[values[0]])
         for x in blacklines:
             ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
             ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')

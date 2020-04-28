@@ -3,6 +3,8 @@ import pandas as pd
 import os
 import datetime
 import re
+import wget
+
 
 class COVID19_measures(object):
     '''
@@ -20,6 +22,10 @@ class COVID19_measures(object):
        https://www.bsg.ox.ac.uk/research/research-projects/coronavirus-government-response-tracker
        https://ocgptweb.azurewebsites.net/CSVDownload
        complied by Hale, Webster, Petherick, Phillips, Kira (2020), CC-BY-SA 4.0
+    * ACAPS
+       https://www.acaps.org/covid19-government-measures-dataset
+       info@acaps.org
+       README: https://www.acaps.org/sites/acaps/files/key-documents/files/acaps_covid-19_government_measures_dataset_readme.pdf
        
     read table of measures from CSV file,
     and download data from github if not present or forced
@@ -78,13 +84,26 @@ class COVID19_measures(object):
                                                    'MaxMeasureLevel':     1,
                                                    'DownloadURL':         'https://ocgptweb.azurewebsites.net/CSVDownload',
                                                    'DatafileName':        'OxCGRT_Full.csv',
-                                                   'DatafileReadOptions': {}}
+                                                   'DatafileReadOptions': {}},
+                                        'ACAPS':  {'dateformat':          '%d/%m/%Y',
+                                                   'Country':             'COUNTRY',
+                                                   'CountryCodes':        'ISO',
+                                                   'MaxMeasureLevel':     2,
+                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/20200423_acaps_-_covid-19_goverment_measures_dataset_v10.xlsx',
+                                                   'DatafileName':        'ACAPS_covid19_measures.xlxs',
+                                                   'DatafileReadOptions': {'sheet_name':'Database'}}
                                     }
+
+        self.__update_dsinfo = kwargs.get('datasourceinfo',None)
+        if not self.__update_dsinfo is None:
+            self.__datasourceinfo[self.__datasource].update(self.__update_dsinfo)
         
         # can switch internal declaration of countries completely to the ISO3C countrycodes
         # no full names of countries can be used then
         if self.__countrycodes:   self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['CountryCodes']
         else:                     self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['Country']
+
+
 
         if self.__datasource in self.__datasourceinfo.keys():
             self.ReadData()
@@ -93,9 +112,9 @@ class COVID19_measures(object):
 
 
 
+
     def DownloadData(self):
-        tmpdata = pd.read_csv(self.__datasourceinfo[self.__datasource]['DownloadURL'],**self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
-        tmpdata.to_csv(self.__datasourceinfo[self.__datasource]['DatafileName'])
+        wget.download(self.__datasourceinfo[self.__datasource]['DownloadURL'],self.__datasourceinfo[self.__datasource]['DatafileName'])
 
 
     
@@ -103,12 +122,22 @@ class COVID19_measures(object):
         return datetime.datetime.strptime(str(datestr),self.__datasourceinfo[self.__datasource]['dateformat']).strftime(self.__dateformat)
 
 
+
+    def filetype(self, datasource = None):
+        return str(os.path.splitext(self.__datasourceinfo[datasource]['DatafileName'])[1]).strip('.').upper()
+
+
     
     def ReadData(self):
         if not os.path.exists(self.__datasourceinfo[self.__datasource]['DatafileName']) or self.__downloaddata:
             self.DownloadData()
         
-        readdata           = pd.read_csv(self.__datasourceinfo[self.__datasource]['DatafileName'],**self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
+        if self.filetype(self.__datasource) == 'CSV':
+            readdata       = pd.read_csv(self.__datasourceinfo[self.__datasource]['DatafileName'],**self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
+        elif self.filetype(self.__datasource) == 'XLXS':
+            readdata       = pd.read_excel(self.__datasourceinfo[self.__datasource]['DatafileName'], **self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
+        else:
+            raise NotImplementedError
         self.__countrylist = list(readdata[self.__countrycolumn].unique())
         
         if self.__datasource == 'CSH':
@@ -136,6 +165,12 @@ class COVID19_measures(object):
                             self.__data = pd.DataFrame({k:np.array([v]) for k,v in db_entry_dict.items()})
                         else:
                             self.__data = self.__data.append(db_entry_dict, ignore_index = True)
+        
+        elif self.__datasource == 'ACAPS':
+            self.__data = readdata[[self.__countrycolumn,'DATE_IMPLEMENTED','CATEGORY','MEASURE']]
+            self.__data.columns = [self.__countrycolumn,'Date', 'Measure_L1', 'Measure_L2']
+            self.__data.dropna(inplace = True)
+            self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
         
         else:
             NotImplementedError
@@ -240,7 +275,7 @@ class COVID19_measures(object):
 
 
 
-    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/20', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = False):
+    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = False):
         if country in self.__countrylist:
             countrydata = self.CountryData(country = country, measure_level = measure_level, only_first_dates = True)
             return pd.DataFrame(    {   self.CleanUpMeasureName(measurename, clean_up = clean_measurename):
