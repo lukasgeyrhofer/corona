@@ -250,7 +250,7 @@ class CrossValidation(object):
 
 
 
-    def ComputeFinalModels(self, modelparameters = [(6,1e-3)], L1_wt = 1):
+    def ComputeFinalModels(self, modelparameters = [(6,1e-3)], L1_wt = 1, crossvalcount = None):
         self.finalModels     = []
         self.finalResults    = []
         self.finalCV         = None
@@ -259,7 +259,7 @@ class CrossValidation(object):
         for i, (shiftdays, alpha) in enumerate(modelparameters):
             self.finalParameters.append((shiftdays,alpha))
             
-            finalCV      = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, outputheader = {'modelindex':i})
+            finalCV      = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, outputheader = {'modelindex':i}, crossvalcount = crossvalcount)
             self.finalCV = self.addDF(self.finalCV, finalCV)
             
             measurelist  = list(self.RegressionDF(shiftdays).columns)
