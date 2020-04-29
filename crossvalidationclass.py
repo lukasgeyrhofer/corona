@@ -138,19 +138,8 @@ class CrossValidation(object):
         # extend this list to the whole dataset
         samples           = np.concatenate([s * np.ones(len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == countrylist[i]]), dtype = np.int) for i,s in enumerate(sample_countries)])
 
-        #print(countrylist)
-        #print(sample_countries)
-        #print(samples)
-        #print(len(countrylist))
-        #print(len(sample_countries))
-        #print(crossvalcount)
-        
-        #print(len(self.RegressionDF(shiftdays)))
-        #print(len(samples))
-        
         for xv_index in range(crossvalcount):
             testcountries = [countrylist[i] for i,s in enumerate(sample_countries) if s == xv_index]
-            #print(xv_index, testcountries)
             trainidx      = (samples != xv_index)
             testidx       = (samples == xv_index)
             trainmodel    = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[trainidx])
