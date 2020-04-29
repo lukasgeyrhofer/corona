@@ -93,7 +93,7 @@ class CrossValidation(object):
                     if measurename not in measurecount.keys():
                         DF_country.drop(labels = measurename, axis = 'columns')
                 
-                DF_country['Country']     = country
+                DF_country['Country']     = str(country)
                 DF_country['Observable']  = observable
 
 
@@ -125,16 +125,6 @@ class CrossValidation(object):
         
         formula           = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
         
-        #if not countrywise_crossvalidation:
-            ## assign samples to each of the crossvalidation chunks
-            #datalen       = len(self.RegressionDF(shiftdays))
-            #chunklen      = np.ones(crossvalcount,dtype = np.int) * (datalen // crossvalcount)
-            #chunklen[:datalen%crossvalcount] += 1
-            #samples       = np.random.permutation(np.concatenate([i*np.ones(chunklen[i],dtype = np.int) for i in range(crossvalcount)]))
-        #else:
-            #crossvalcount = len(countrylist)
-            #samples       = np.concatenate([i * np.ones(len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == countrylist[i]])) for i in range(crossvalcount)])
-            
         countrylist       = list(self.RegressionDF(shiftdays)['Country'].unique())
         
         if crossvalcount is None:            crossvalcount = len(countrylist)
@@ -147,11 +137,20 @@ class CrossValidation(object):
         sample_countries  = np.random.permutation(np.concatenate([i * np.ones(chunklen[i],dtype = np.int) for i in range(crossvalcount)]))
         # extend this list to the whole dataset
         samples           = np.concatenate([s * np.ones(len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == countrylist[i]]), dtype = np.int) for i,s in enumerate(sample_countries)])
-            
+
+        #print(countrylist)
+        #print(sample_countries)
+        #print(samples)
+        #print(len(countrylist))
+        #print(len(sample_countries))
+        #print(crossvalcount)
+        
+        #print(len(self.RegressionDF(shiftdays)))
+        #print(len(samples))
         
         for xv_index in range(crossvalcount):
             testcountries = [countrylist[i] for i,s in enumerate(sample_countries) if s == xv_index]
-            
+            #print(xv_index, testcountries)
             trainidx      = (samples != xv_index)
             testidx       = (samples == xv_index)
             trainmodel    = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[trainidx])
@@ -173,7 +172,7 @@ class CrossValidation(object):
                 
             # store results in dict
             result_dict                          = {'shiftdays': shiftdays, 'alpha': alpha}
-            result_dict['Test Countries']        = '; '.join(testcountries)
+            result_dict['Test Countries']        = '; '.join([str(c) for c in testcountries])
             result_dict['Test Sample Size']      = np.sum([len(self.RegressionDF(shiftdays)[self.RegressionDF(shiftdays)['Country'] == country]) for country in testcountries])
             result_dict['Training Sample Size']  = len(self.RegressionDF(shiftdays)) - result_dict['Test Sample Size']
             result_dict['Loglike Training']      = trainmodel.loglike(trainresults.params)
@@ -432,7 +431,7 @@ class CrossValidation(object):
 
 
         
-    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [-30,-20,-10,0,10], graylines = [], border = 2):
+    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [-30,-20,-10,0,10], graylines = [], border = 2, title = ''):
         # get plotting area
         minplot      = np.min(blacklines + graylines)
         maxplot      = np.max(blacklines + graylines)
@@ -465,8 +464,10 @@ class CrossValidation(object):
             ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
         
         # format output
-        ax.set_xlim([1e-2 * (-(len(measure_effects.columns) -3) * labelsize - 2*border + minplot), 1e-2 * (maxplot+border)])
-        ax.set_ylim([-j-2,1.6])
+        if title != '':
+            ax.annotate(title,[1e-2 * (-(len(measure_effects.columns) - 3) * labelsize + minplot),1.2], fontsize = 12, weight = 'bold')
+        ax.set_xlim([1e-2 * (-(len(measure_effects.columns) -3 ) * labelsize - 2*border + minplot), 1e-2 * (maxplot+border)])
+        ax.set_ylim([-j-2,1.8])
         ax.axis('off')
         fig.savefig(filename)
 

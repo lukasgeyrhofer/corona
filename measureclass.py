@@ -167,7 +167,7 @@ class COVID19_measures(object):
                             self.__data = self.__data.append(db_entry_dict, ignore_index = True)
         
         elif self.__datasource == 'ACAPS':
-            self.__data = readdata[[self.__countrycolumn,'DATE_IMPLEMENTED','CATEGORY','MEASURE']]
+            self.__data = readdata[[self.__countrycolumn,'DATE_IMPLEMENTED','CATEGORY','MEASURE']].copy(deep=True)
             self.__data.columns = [self.__countrycolumn,'Date', 'Measure_L1', 'Measure_L2']
             self.__data.dropna(inplace = True)
             self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
