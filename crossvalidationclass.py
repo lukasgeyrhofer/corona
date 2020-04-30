@@ -25,12 +25,12 @@ import measureclass as mc
 
 class CrossValidation(object):
     def __init__(self, **kwargs):
-        self.__MinCaseCount          = kwargs.get('MinCases', 30) # start trajectories with at least 30 confirmed cases
-        self.__MeasureMinCount       = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
-        self.__verbose               = kwargs.get('verbose', False)
-        self.__cvres_filename        = kwargs.get('CVResultsFilename',None)
-        self.__external_regrDF_files = kwargs.get('ExternalRegrDF',{})
-
+        self.__MinCaseCount             = kwargs.get('MinCases', 30) # start trajectories with at least 30 confirmed cases
+        self.__MeasureMinCount          = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
+        self.__verbose                  = kwargs.get('verbose', False)
+        self.__cvres_filename           = kwargs.get('CVResultsFilename',None)
+        self.__external_regrDF_files    = kwargs.get('ExternalRegrDF',{})
+        self.__external_observable_file = kwargs.get('ExternalObservableFile',None)
         
         # load data from DB files
         self.jhu_data          = cdc.CoronaData(**kwargs)
@@ -41,12 +41,17 @@ class CrossValidation(object):
         self.measure_data.RenameCountry('Czech Republic', 'Czechia')
         
         
+        self.__UseExternalObs = False
+        self.__UseExternalRegrDF = False
         if len(self.__external_regrDF_files) > 0:
             for shiftday,filename in self.__external_regrDF_files.items():
                 self.__regrDF[shiftday] = pd.read_csv(filename)
             self.__UseExternalRegrDF = True
-        else:
-            self.__UseExternalRegrDF = False
+        elif not self.__external_observable_file is None:
+            self.__UseExternalObs = True
+            self.__ExternalObservables = pd.read_csv(self.__external_observable_file)
+            
+
         
         
         # set up internal storage
@@ -58,6 +63,40 @@ class CrossValidation(object):
     
         self.__kwargs_for_pickle = kwargs
         
+        
+    
+    def HaveCountryData(self, country = None):
+        if self.__UseExternalObs:
+            if country in self.__ExternalObservables['country'].unique():
+                return True
+        else:
+            if country in self.jhu_data.countrylist:
+                return True
+        return False
+    
+    
+    
+    def GetObservable(self, country):
+        if not self.__UseExternalObs:
+            observable = self.jhu_data.CountryGrowthRates(country = country)['Confirmed'].values 
+            
+            startdate, startindex     = '22/1/2020', 0
+            if not self.__MinCaseCount is None:
+                startdate, startindex = self.jhu_data.DateAtCases(country = country, cases = self.__MinCaseCount, outputformat = '%d/%m/%Y', return_index = True)
+                observable            = observable[startindex:]
+
+            if not self.__maxlen is None:
+                observable            = observable[:np.min([self.__maxlen,len(observable) + 1])]
+            
+        else:
+            # import from Nils' files
+            c_index    = np.array(self.__ExternalObservables['country'] == country)
+            observable = self.__ExternalObservables[c_index]['Median(R)'].values[1:] # first entry is usually 0
+            startdate  = (datetime.datetime.strptime(self.__ExternalObservables[c_index]['startdate'].values[0],'%Y-%m-%d') + datetime.timedelta(days = 1)).strftime('%d/%m/%Y')            
+            startindex = (datetime.datetime.strptime(startdate,'%d/%m/%Y') - datetime.datetime.strptime('22/1/2020','%d/%m/%Y')).days
+            
+        return observable, startdate, startindex
+    
     
     
     def GenerateRDF(self, shiftdays = 0, countrylist = None):
@@ -68,18 +107,10 @@ class CrossValidation(object):
         measurecount    = self.measure_data.MeasureList(countrylist = countrylist, mincount = self.__MeasureMinCount, measure_level = 2)
 
         for country in countrylist:
-            if (country in self.measure_data.countrylist) and (country in self.jhu_data.countrylist):
-
-                observable                = self.jhu_data.CountryGrowthRates(country = country)['Confirmed'].values
-                startdate, startindex     = '22/1/2020', 0
-                if not self.__MinCaseCount is None:
-                    startdate, startindex = self.jhu_data.DateAtCases(country = country, cases = self.__MinCaseCount, outputformat = '%d/%m/%Y', return_index = True)
-                    observable            = observable[startindex:]
-
-                if not self.__maxlen is None:
-                    observable            = observable[:np.min([self.__maxlen,len(observable) + 1])]
-                    
-                obslen                    = len(observable)
+            if (country in self.measure_data.countrylist) and self.HaveCountryData(country):
+                
+                observable, startdate, startindex = self.GetObservable(country)
+                obslen                            = len(observable)
                 
                 DF_country = self.measure_data.ImplementationTable(country           = country,
                                                                    measure_level     = 2,
