@@ -9,11 +9,11 @@ import wget
 class COVID19_measures(object):
     '''
     ***************************************************
-    **  wrapper for COVID19 measures tracked by CSH  **
+    **  wrapper for COVID19 measures                 **
     **  github.com/lukasgeyrhofer/corona/            **
     ***************************************************
 
-    two sources for implemented measures possible:
+    multiple sources for implemented measures possible:
     
     * CSH
        https://github.com/amel-github/covid19-interventionmeasures
@@ -33,27 +33,40 @@ class COVID19_measures(object):
     main usage:
     ( with default options )
     ***************************************************
-    
-        data = COVID19_measures( datasource           = 'CSH',
-                                 download_data        = False,
-                                 measure_level        = 2,
-                                 only_first_dates     = False,
-                                 unique_dates         = True,
-                                 extend_measure_names = False )
-    
+        # initialize dataset    
+        measure_data = COVID19_measures( datasource           = 'CSH',
+                                         download_data        = False,
+                                         measure_level        = 2,
+                                         only_first_dates     = False,
+                                         unique_dates         = True,
+                                         extend_measure_names = False )
+
+
+        # dataset is iterable
+        
         for countryname, measuredata in data:
-            // do stuff with measuredata
+            # do stuff with measuredata
+            # measuredata is dictionary:
+            #   keys: name of measures 
+            #   values: list of dates when implemented
+
+
+        # obtain DF with columns of implemented measures (0/1) over timespan as index
+        # only 'country' is required option, defaults as below
+        
+        imptable = measure_data.ImplementationTable( country       = 'Austria',
+                                                     measure_level = 2,
+                                                     startdata     = '22/1/2020',
+                                                     enddate       = None,  # today
+                                                     shiftdays     = 0 )
     
     ***************************************************
     
-    measuredata is dictionary:
-        keys: name of measures 
-        values: list of dates when implemented
-    
-    only return measures that correspond to 'measure_level' = [1 .. 4]
-    if 'only_first_dates == True' only return date of first occurence of measure for this level, otherwise whole list
-    if 'extend_measure_dates == True' keys are changed to include all names of all levels of measures
-    if 'unique_dates == True' remove duplicate days in list of values
+    options at initialization:
+     * only return measures that correspond to 'measure_level' = [1 .. 4]
+     * if 'only_first_dates == True' only return date of first occurence of measure for this level, otherwise whole list
+     * if 'extend_measure_dates == True' keys are changed to include all names of all levels of measures
+     * if 'unique_dates == True' remove duplicate days in list of values
 
     ***************************************************        
     '''
@@ -240,25 +253,28 @@ class COVID19_measures(object):
     
     
 
-    def date2vector(self, implementdate, start = '22/1/2020', end = None, shiftdays = 0, maxlen = None, datefmt = '%d/%m/%Y', only_pulse = False):
+    def dates2vector(self, implementdate, start = '22/1/2020', end = None, shiftdays = 0, maxlen = None, datefmt = '%d/%m/%Y', only_pulse = False):
         # generate vector of 0s and 1s when measure is implemented or not
+        # or, when 'only_pulse == True', then output 1 only at dates of implementation
         starttime     = datetime.datetime.strptime(start,         datefmt)
         if end is None:
             endtime   = datetime.datetime.today()
         else:
             endtime   = datetime.datetime.strptime(end,           datefmt)
-        implementtime = datetime.datetime.strptime(implementdate, datefmt)
-        
-        totaldays   = (endtime       - starttime).days
-        measuredays = (implementtime - starttime).days
-        
+        implementlist = [datetime.datetime.strptime(date, datefmt) for date in self.SortDates(implementdate)]
+
+        totaldays   = (endtime - starttime).days
         vec         = np.zeros(totaldays)
-        if onlypulse:
-            if measuredays+shiftdays < len(vec):
-                vec[measuredata+shiftdays] = 1
+
+        if only_pulse:
+            for implementtime in implementlist:
+                measuredays = (implementtime - starttime).days
+                if measuredays+shiftdays < len(vec):
+                    vec[measuredata+shiftdays] = 1
         else:
+            measuredays = (implementlist[0] - starttime).days
             vec[min(measuredays+shiftdays,len(vec)-1):] = 1
-        
+            
         if not maxlen is None:
             vec     = vec[:min(maxlen,len(vec))]
         
@@ -273,13 +289,15 @@ class COVID19_measures(object):
 
 
 
-    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = False, only_pulse = False):
+    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = True, only_pulse = False):
         if country in self.__countrylist:
-            countrydata = self.CountryData(country = country, measure_level = measure_level, only_first_dates = True)
-            return pd.DataFrame(    {   self.CleanUpMeasureName(measurename, clean_up = clean_measurename):
-                                        self.date2vector(implemented[0], start = startdate, end = enddate, shiftdays = shiftdays, maxlen = maxlen, only_pulse = only_pulse)
-                                        for measurename, implemented in countrydata.items()
-                                    } )
+            countrydata  = self.CountryData(country = country, measure_level = measure_level, only_first_dates = False)
+            ret_imptable = pd.DataFrame( { self.CleanUpMeasureName(measurename, clean_up = clean_measurename):
+                                           self.dates2vector(implemented, start = startdate, end = enddate, shiftdays = shiftdays, maxlen = maxlen, only_pulse = only_pulse)
+                                           for measurename, implemented in countrydata.items() } )
+            ret_imptable.index = [(datetime.datetime.strptime(startdate,'%d/%m/%Y') + datetime.timedelta(days = i)).strftime(self.__dateformat) for i in range(len(ret_imptable))]
+            return ret_imptable
+
         else:
             return None
 
