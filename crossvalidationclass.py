@@ -104,7 +104,7 @@ class CrossValidation(object):
             countrylist = self.measure_data.countrylist
         
         regressionDF    = None
-        measurecount    = self.measure_data.MeasureList(countrylist = countrylist, mincount = self.__MeasureMinCount, measure_level = 2)
+        measurelist    = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2)
 
         for country in countrylist:
             if (country in self.measure_data.countrylist) and self.HaveCountryData(country):
@@ -121,12 +121,11 @@ class CrossValidation(object):
                                                                    clean_measurename = True)
                 # remove measures not in list
                 for measurename in DF_country.columns:
-                    if measurename not in measurecount.keys():
+                    if measurename not in measurelist.index:
                         DF_country.drop(labels = measurename, axis = 'columns')
                 
                 DF_country['Country']     = str(country)
                 DF_country['Observable']  = observable
-
 
                 regressionDF = self.addDF(regressionDF,DF_country)
 
@@ -316,10 +315,10 @@ class CrossValidation(object):
        
     
     
-    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None):
+    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,0.02), figsize = (15,6)):
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
         
-        fig,axes = plt.subplots(1,2,figsize = (15,6), sharey = True)
+        fig,axes = plt.subplots(1,2,figsize = figsize, sharey = True)
         ax = axes.flatten()
         
         shiftdaylist = np.array(processedCV['shiftdays'].unique(), dtype = np.int)
@@ -340,10 +339,10 @@ class CrossValidation(object):
             ax[i].set_xlabel(r'Penalty parameter $\alpha$')
             ax[i].set_xscale('log')
             ax[i].grid()
-        ax[0].set_ylim([0,.02])
+        ax[0].set_ylim(ylim)
         
-        ax[0].set_ylabel('RSS Test (sum over crossval)')
-        ax[1].set_ylabel('RSS Training (sum over crossval)')
+        ax[0].set_ylabel('RSS/datapoint Test')
+        ax[1].set_ylabel('RSS/datapoint Training')
         
         fig.tight_layout()
         fig.savefig(filename)
@@ -360,7 +359,7 @@ class CrossValidation(object):
         colornames  = ['gray','#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
 
         # collect measure names for labels
-        measurelist = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, extend_measure_names = True, measure_level = 2)
+        measurelist = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2)
         countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
         modelcount  = len(self.finalModels)
         intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
@@ -437,7 +436,7 @@ class CrossValidation(object):
 
     def GetMeasureEffects(self, drop_zeros = False, rescale = True):
         if not self.finalCV is None:
-            finalCVrelative                = self.finalCV[self.finalCV.columns[10:]]
+            finalCVrelative                = self.finalCV.copy(deep=True)
             if rescale: finalCVrelative    = finalCVrelative.divide(self.finalCV['Intercept'],axis = 0)
             finalCVrelative                = finalCVrelative.quantile([.5,.025,.975]).T
             finalCVrelative.columns        = ['median', 'low', 'high']            
