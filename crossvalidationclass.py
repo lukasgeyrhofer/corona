@@ -40,7 +40,6 @@ class CrossValidation(object):
         self.measure_data.RenameCountry('South Korea', 'Korea, South')
         self.measure_data.RenameCountry('Czech Republic', 'Czechia')
         
-        
         self.__UseExternalObs = False
         self.__UseExternalRegrDF = False
         if len(self.__external_regrDF_files) > 0:
@@ -50,9 +49,6 @@ class CrossValidation(object):
         elif not self.__external_observable_file is None:
             self.__UseExternalObs = True
             self.__ExternalObservables = pd.read_csv(self.__external_observable_file)
-            
-
-        
         
         # set up internal storage
         self.__CVresults     = None
@@ -65,6 +61,17 @@ class CrossValidation(object):
         
         
     
+    def addDF(self, df = None, new = None):
+        if not new is None:
+            if df is None:
+                return new
+            else:
+                return pd.concat([df,new], ignore_index = True, sort = False)
+        else:
+            return df
+
+
+
     def HaveCountryData(self, country = None):
         if self.__UseExternalObs:
             if country in self.__ExternalObservables['country'].unique():
@@ -241,6 +248,7 @@ class CrossValidation(object):
             raise IOError
 
 
+
     def ProcessCVresults(self, CVresults = None):
         if CVresults is None: CVresults = self.__CVresults
         CVresults =  CVresults.groupby(['shiftdays','alpha'], as_index = False).agg(
@@ -287,7 +295,29 @@ class CrossValidation(object):
             
             self.finalModels.append(smf.ols(data = self.RegressionDF(shiftdays), formula = formula))
             self.finalResults.append(self.finalModels[i].fit_regularized(alpha = alpha, L1_wt = L1_wt))
+    
+
+    
+    def GetMeasureEffects(self, drop_zeros = False, rescale = True):
+        if not self.finalCV is None:
+            finalCVrelative                = self.finalCV.copy(deep=True).drop(columns = 'Test Countries', axis = 0)
+            if rescale: finalCVrelative    = finalCVrelative.divide(self.finalCV['Intercept'],axis = 0)
+            finalCVrelative                = finalCVrelative.quantile([.5,.025,.975]).T
+            finalCVrelative.columns        = ['median', 'low', 'high']            
+            if drop_zeros: finalCVrelative = finalCVrelative[(finalCVrelative['median'] != 0) | (finalCVrelative['low'] != 0) | (finalCVrelative['high'] != 0)]
+            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MeasureMinCount).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
+            fCV_withNames.sort_values(by   = ['median','high'], inplace = True)
             
+            return fCV_withNames
+        else:
+            return None
+
+
+        
+
+    # ************************************************************************************
+    # ** plotting output 
+    # ************************************************************************************
 
 
     def PlotTrajectories(self, filename = 'trajectories.pdf', columns = 2):
@@ -423,9 +453,11 @@ class CrossValidation(object):
                 ax.annotate('shiftdays = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
                 ax.set_ylim(ylim)
                 ax.set_xscale('log')            
+        
         fig.tight_layout()
         fig.savefig(filename)
     
+
 
     def PlotMeasureListValues(self, filename = 'measurelist_values.pdf'):
         def significanceColor(beta):
@@ -502,36 +534,20 @@ class CrossValidation(object):
         
 
 
-    def GetMeasureEffects(self, drop_zeros = False, rescale = True):
-        if not self.finalCV is None:
-            finalCVrelative                = self.finalCV.copy(deep=True)
-            if rescale: finalCVrelative    = finalCVrelative.divide(self.finalCV['Intercept'],axis = 0)
-            finalCVrelative                = finalCVrelative.quantile([.5,.025,.975]).T
-            finalCVrelative.columns        = ['median', 'low', 'high']            
-            if drop_zeros: finalCVrelative = finalCVrelative[(finalCVrelative['median'] != 0) | (finalCVrelative['low'] != 0) | (finalCVrelative['high'] != 0)]
-            fCV_withNames                  = self.measure_data.GetMeasureNames().merge(finalCVrelative, how = 'inner', left_index = True, right_index = True)
-            fCV_withNames.sort_values(by   = ['median','high'], inplace = True)
-            
-            return fCV_withNames
-        else:
-            return None
-
-
-        
-    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [-30,-20,-10,0,10], graylines = [], border = 2, title = ''):
+    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40):
         # get plotting area
         minplot      = np.min(blacklines + graylines)
         maxplot      = np.max(blacklines + graylines)
 
         # function to plot one row in DF
-        def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, textlen = 40):
+        def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, textbreak = 40):
             count_labels = len(values) - 3
             ax.plot(values['median'],[ypos], c = measurecolors[values[0]], marker = 'D')
             ax.plot([values['low'],values['high']],[ypos,ypos], c = measurecolors[values[0]], lw = 2)
             background = plt.Rectangle([1e-2 * (minplot - border - count_labels * labelsize), ypos - .4], 1e-2*(count_labels*labelsize + maxplot + border - minplot), .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
             ax.add_patch(background)
             for i in range(count_labels):
-                ax.annotate(textwrap.shorten(values[i], width = textlen), [1e-2*(minplot - (count_labels - i) * labelsize), ypos - .1])
+                ax.annotate(textwrap.shorten(str(values[i]), width = textbreak), [1e-2*(minplot - (count_labels - i) * labelsize), ypos - .1])
 
         # setup
         measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros)
@@ -542,7 +558,7 @@ class CrossValidation(object):
         # actual plotting including vertical lines
         fig,ax = plt.subplots(figsize = figsize)
         for j,(index,values) in enumerate(measure_effects.iterrows()):
-            PlotRow(ax, ypos = -j,values = values, color = measurecolors[values[0]])
+            PlotRow(ax, ypos = -j,values = values, color = measurecolors[values[0]], textbreak = textbreak)
         for x in blacklines:
             ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
             ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
@@ -560,15 +576,9 @@ class CrossValidation(object):
 
 
 
-    def addDF(self, df = None, new = None):
-        if not new is None:
-            if df is None:
-                return new
-            else:
-                return pd.concat([df,new], ignore_index = True, sort = False)
-        else:
-            return df
-    
+    # ************************************************************************************
+    # ** python stuff
+    # ************************************************************************************
 
         
     def __getattr__(self,key):
