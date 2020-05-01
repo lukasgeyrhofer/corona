@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import datetime
 import re
-import wget
+import urllib.request
 
 
 class COVID19_measures(object):
@@ -84,7 +84,7 @@ class COVID19_measures(object):
         self.__removedcountries   = []
         
         self.__datasource         = (kwargs.get('datasource','CSH')).upper()
-        self.__datasourceinfo     = {   'CSH':    {'dateformat':          '%d/%m/%Y',
+        self.__datasourceinfo     = {   'CSH':    {'dateformat':          '%Y-%m-%d',
                                                    'Country':             'Country',
                                                    'CountryCodes':        'iso3c',
                                                    'MaxMeasureLevel':     4,
@@ -127,7 +127,7 @@ class COVID19_measures(object):
 
 
     def DownloadData(self):
-        wget.download(self.__datasourceinfo[self.__datasource]['DownloadURL'],self.__datasourceinfo[self.__datasource]['DatafileName'])
+        urllib.request.urlretrieve(self.__datasourceinfo[self.__datasource]['DownloadURL'],self.__datasourceinfo[self.__datasource]['DatafileName'])
 
 
     
@@ -156,6 +156,7 @@ class COVID19_measures(object):
         if self.__datasource == 'CSH':
             # store CSV directly as data
             self.__data    = readdata.copy(deep = True)
+            self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
     
         elif self.__datasource == 'OXFORD':
             # construct list of measures from DB column names
