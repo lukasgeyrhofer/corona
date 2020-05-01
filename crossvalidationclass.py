@@ -315,7 +315,7 @@ class CrossValidation(object):
        
     
     
-    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,0.02), figsize = (15,6)):
+    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6)):
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
         
         fig,axes = plt.subplots(1,2,figsize = figsize, sharey = True)
@@ -348,6 +348,84 @@ class CrossValidation(object):
         fig.savefig(filename)
     
     
+    
+    def PlotCVevaluation(self, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10)):
+        if isinstance(shiftdays,int):
+            shiftdaylist = [shiftdays]
+        elif isinstance(shiftdays,(tuple,list,np.ndarray)):
+            shiftdaylist = shiftdays
+        elif shiftdays is None:
+            shiftdaylist = list(self.CVresults['shiftdays'].unique())
+            
+        fig,axes = plt.subplots(len(shiftdaylist),1,figsize=figsize)
+        ax_index = 0
+        for shiftdays in shiftdaylist:
+            if shiftdays in self.CVresults['shiftdays']:
+                
+                if len(shiftdaylist) == 1:
+                    ax = axes
+                else:
+                    ax = axes[ax_index]
+                    ax_index += 1
+                
+                restrictedCV = self.CVresults[self.CVresults['shiftdays'] == shiftdays].copy(deep = True)
+                restrictedCV.drop(columns = 'Test Countries',inplace = True)
+                restrictedCV.divide(restrictedCV['Intercept'],axis = 0)
+                restrictedCV['alpha'] = ['{:.8f}'.format(a) for a in restrictedCV['alpha']]
+                restrictedCV.sort_values(by = 'alpha', inplace = True)
+
+                median = restrictedCV.groupby(by = 'alpha', as_index = True).quantile(.5)
+                low    = restrictedCV.groupby(by = 'alpha', as_index = True).quantile(.025)
+                high   = restrictedCV.groupby(by = 'alpha', as_index = True).quantile(.975)
+
+                measurelist     = self.measure_data.MeasureList(mincount = self.__MeasureMinCount)
+                median_measures = measurelist.merge(median.T, how = 'inner', left_index = True, right_index = True).T
+                low_measures    = measurelist.merge(low.T,    how = 'inner', left_index = True, right_index = True).T
+                high_measures   = measurelist.merge(high.T,   how = 'inner', left_index = True, right_index = True).T
+
+                colornames = [cn for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
+                colordict = {}
+                for i,l1name in enumerate(median_measures.loc['Measure_L1'].unique()):
+                    colordict[l1name] = colornames[i % len(colornames)]
+
+
+                alphalist = np.array(median_measures.index[3:],dtype = np.float)
+
+                if country_effects:
+                    countrycolor    = '#777777'
+                    countrylist     = pd.DataFrame({'Country':[country for country in restrictedCV.columns if country[:3] == 'C(C']})
+                    median_country  = countrylist.merge(median.T,   how = 'inner', right_index = True, left_on = 'Country').T
+                    low_country     = countrylist.merge(low.T,      how = 'inner', right_index = True, left_on = 'Country').T
+                    high_country    = countrylist.merge(high.T,     how = 'inner', right_index = True, left_on = 'Country').T
+
+                    for country in median_country.columns:
+                        ax.plot(alphalist,median_country[country].values[1:],c = countrycolor,lw = .5)
+                        ylow = np.array(low_country[country].values[1:],dtype=np.float)
+                        yhigh = np.array(high_country[country].values[1:],dtype=np.float)
+                        ax.fill_between(alphalist,y1 = ylow,y2=yhigh,color = countrycolor,alpha = .05)
+
+
+                for measure in median_measures.columns:
+                    color = colordict[median_measures[measure].values[0]]
+                    ax.plot(alphalist,median_measures[measure].values[3:], c = color, lw = 2)
+                    ylow = np.array(low_measures[measure].values[3:],dtype=np.float)
+                    yhigh = np.array(high_measures[measure].values[3:],dtype=np.float)
+                    ax.fill_between(alphalist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
+                    
+
+                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in colordict.items()]
+                if country_effects:
+                    legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
+                
+                ax.legend(handles = legendhandles )
+                ax.set_xlabel(r'Penalty Parameter $\alpha$')
+                ax.set_ylabel(r'Relative Effect Size')
+                ax.annotate('shiftdays = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
+                ax.set_ylim(ylim)
+                ax.set_xscale('log')            
+        fig.tight_layout()
+        fig.savefig(filename)
+    
 
     def PlotMeasureListValues(self, filename = 'measurelist_values.pdf'):
         def significanceColor(beta):
@@ -363,16 +441,6 @@ class CrossValidation(object):
         countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
         modelcount  = len(self.finalModels)
         intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
-
-        # convert shortened measure names backward
-        measure_level_dict = {}
-        for mn in measurelist.keys():
-            l1,l2 = mn.split(' -- ')
-            if not l1 in measure_level_dict.keys():
-                measure_level_dict[l1] = {}
-            measure_level_dict[l1][l2] = self.measure_data.CleanUpMeasureName(l2)
-        L1names = list(measure_level_dict.keys())
-        L1names.sort()
 
         # internal counters to determine position to plot
         ypos = 0
