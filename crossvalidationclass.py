@@ -59,9 +59,9 @@ class CrossValidation(object):
     
         self.__kwargs_for_pickle = kwargs
         
-        
+        self.colornames = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b'] # Amelie's color scheme
         self.colornames = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
-        self.L1colors   = {L1name:self.colornames[i] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount)['Measure_L1'].unique())}
+        self.L1colors   = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount)['Measure_L1'].unique())}
         
         
         
@@ -247,8 +247,8 @@ class CrossValidation(object):
     def LoadCVResults(self, filename, reset = True):
         if os.path.exists(filename):
             if self.__verbose:print('# loading CV results from "{}"'.format(filename))
-            if reset:   self.__CVresults = pd.read_csv(filename)
-            else:       self.__CVresults = self.addDF(pd.read_csv(filename))
+            if reset:   self.__CVresults = pd.read_csv(filename,index_col = 0)
+            else:       self.__CVresults = self.addDF(pd.read_csv(filename,index_col = 0))
         else:
             raise IOError
 
@@ -394,6 +394,25 @@ class CrossValidation(object):
             
         fig,axes = plt.subplots(len(shiftdaylist),1,figsize=figsize)
         ax_index = 0
+        
+        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MeasureMinCount).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0).groupby(by = ['shiftdays','alpha'],as_index=False)
+
+        median_measures = grouped_parameters.quantile(.5)
+        low_measures    = grouped_parameters.quantile(.025)
+        high_measures   = grouped_parameters.quantile(.975)
+
+        measuredict = {index:l1name for index,l1name in self.measure_data.MeasureList(mincount = self.__MeasureMinCount)['Measure_L1'].items()}
+        
+        if country_effects:
+            countrycolor    = '#777777'
+            countrylist     = pd.DataFrame({'Country':[country for country in restrictedCV.columns if country[:3] == 'C(C']})
+
+            grouped_country = countrylist.merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0).groupby(by = ['shiftdays','alpha'],as_index=False)
+
+            median_country  = grouped_country.quantile(.5)
+            low_country     = grouped_country.quantile(.025)
+            high_country    = grouped_country.quantile(.975)
+
         for shiftdays in shiftdaylist:
             if shiftdays in self.CVresults['shiftdays']:
                 
@@ -402,53 +421,27 @@ class CrossValidation(object):
                 else:
                     ax = axes[ax_index]
                     ax_index += 1
-                
-                restrictedCV = self.CVresults[self.CVresults['shiftdays'] == shiftdays].copy(deep = True)
-                restrictedCV.drop(columns = 'Test Countries',inplace = True)
-                restrictedCV.divide(restrictedCV['Intercept'],axis = 0)
-                restrictedCV['alpha'] = ['{:.8f}'.format(a) for a in restrictedCV['alpha']]
-                restrictedCV.sort_values(by = 'alpha', inplace = True)
-
-                median = restrictedCV.groupby(by = 'alpha', as_index = True).quantile(.5)
-                low    = restrictedCV.groupby(by = 'alpha', as_index = True).quantile(.025)
-                high   = restrictedCV.groupby(by = 'alpha', as_index = True).quantile(.975)
-
-                measurelist     = self.measure_data.MeasureList(mincount = self.__MeasureMinCount)
-                median_measures = measurelist.merge(median.T, how = 'inner', left_index = True, right_index = True).T
-                low_measures    = measurelist.merge(low.T,    how = 'inner', left_index = True, right_index = True).T
-                high_measures   = measurelist.merge(high.T,   how = 'inner', left_index = True, right_index = True).T
-
-                colornames = [cn for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
-                colordict = {}
-                for i,l1name in enumerate(median_measures.loc['Measure_L1'].unique()):
-                    colordict[l1name] = colornames[i % len(colornames)]
-
-
-                alphalist = np.array(median_measures.index[3:],dtype = np.float)
 
                 if country_effects:
-                    countrycolor    = '#777777'
-                    countrylist     = pd.DataFrame({'Country':[country for country in restrictedCV.columns if country[:3] == 'C(C']})
-                    median_country  = countrylist.merge(median.T,   how = 'inner', right_index = True, left_on = 'Country').T
-                    low_country     = countrylist.merge(low.T,      how = 'inner', right_index = True, left_on = 'Country').T
-                    high_country    = countrylist.merge(high.T,     how = 'inner', right_index = True, left_on = 'Country').T
-
-                    for country in median_country.columns:
-                        ax.plot(alphalist,median_country[country].values[1:],c = countrycolor,lw = .5)
-                        ylow = np.array(low_country[country].values[1:],dtype=np.float)
-                        yhigh = np.array(high_country[country].values[1:],dtype=np.float)
+                    s_index = (median_country['shiftdays'] == shiftdays)
+                    alphalist = median_country[s_index]['alpha'].values
+                    for country in [c for c in median_country.columns if c != 'shiftdays' and c != 'alpha']:
+                        ax.plot(alphalist,median_country[country].values,c = countrycolor,lw = .5)
+                        ylow  = np.array(low_country[country].values,dtype=np.float)
+                        yhigh = np.array(high_country[country].values,dtype=np.float)
                         ax.fill_between(alphalist,y1 = ylow,y2=yhigh,color = countrycolor,alpha = .05)
 
+                s_index = (median_measures['shiftdays'] == shiftdays)
+                alphalist = median_measures[s_index]['alpha'].values
 
-                for measure in median_measures.columns:
-                    color = self.colornames[median_measures[measure].values[0]]
-                    ax.plot(alphalist,median_measures[measure].values[3:], c = color, lw = 2)
-                    ylow = np.array(low_measures[measure].values[3:],dtype=np.float)
-                    yhigh = np.array(high_measures[measure].values[3:],dtype=np.float)
+                for measure in [m for m in median_measures.columns if m != 'shiftdays' and m != 'alpha']:
+                    color = self.L1colors[measuredict[measure]]
+                    ax.plot(alphalist,median_measures[s_index][measure].values, c = color, lw = 2)
+                    ylow  = np.array(low_measures[s_index][measure].values,dtype=np.float)
+                    yhigh = np.array(high_measures[s_index][measure].values,dtype=np.float)
                     ax.fill_between(alphalist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
-                    
 
-                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.colornames.items()]
+                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.L1colors.items()]
                 if country_effects:
                     legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
                 
@@ -547,8 +540,8 @@ class CrossValidation(object):
         # function to plot one row in DF
         def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, textbreak = 40):
             count_labels = len(values) - 3
-            ax.plot(values['median'],[ypos], c = self.colornames[values[0]], marker = 'D')
-            ax.plot([values['low'],values['high']],[ypos,ypos], c = self.colornames[values[0]], lw = 2)
+            ax.plot(values['median'],[ypos], c = self.L1colors[values[0]], marker = 'D')
+            ax.plot([values['low'],values['high']],[ypos,ypos], c = self.L1colors[values[0]], lw = 2)
             background = plt.Rectangle([1e-2 * (minplot - border - count_labels * labelsize), ypos - .4], 1e-2*(count_labels*labelsize + maxplot + border - minplot), .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
             ax.add_patch(background)
             for i in range(count_labels):
@@ -556,13 +549,11 @@ class CrossValidation(object):
 
         # setup
         measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros)
-        colornames      = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
-        colornames      = [cn for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
         
         # actual plotting including vertical lines
         fig,ax = plt.subplots(figsize = figsize)
         for j,(index,values) in enumerate(measure_effects.iterrows()):
-            PlotRow(ax, ypos = -j,values = values, color = self.colornames[values[0]], textbreak = textbreak)
+            PlotRow(ax, ypos = -j,values = values, color = self.L1colors[values[0]], textbreak = textbreak)
         for x in blacklines:
             ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
             ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
