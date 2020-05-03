@@ -60,6 +60,11 @@ class CrossValidation(object):
         self.__kwargs_for_pickle = kwargs
         
         
+        self.colornames = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
+        self.L1colors   = {L1name:self.colornames[i] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount)['Measure_L1'].unique())}
+        
+        
+        
     
     def addDF(self, df = None, new = None):
         if not new is None:
@@ -436,14 +441,14 @@ class CrossValidation(object):
 
 
                 for measure in median_measures.columns:
-                    color = colordict[median_measures[measure].values[0]]
+                    color = self.colornames[median_measures[measure].values[0]]
                     ax.plot(alphalist,median_measures[measure].values[3:], c = color, lw = 2)
                     ylow = np.array(low_measures[measure].values[3:],dtype=np.float)
                     yhigh = np.array(high_measures[measure].values[3:],dtype=np.float)
                     ax.fill_between(alphalist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
                     
 
-                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in colordict.items()]
+                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.colornames.items()]
                 if country_effects:
                     legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
                 
@@ -542,8 +547,8 @@ class CrossValidation(object):
         # function to plot one row in DF
         def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, textbreak = 40):
             count_labels = len(values) - 3
-            ax.plot(values['median'],[ypos], c = measurecolors[values[0]], marker = 'D')
-            ax.plot([values['low'],values['high']],[ypos,ypos], c = measurecolors[values[0]], lw = 2)
+            ax.plot(values['median'],[ypos], c = self.colornames[values[0]], marker = 'D')
+            ax.plot([values['low'],values['high']],[ypos,ypos], c = self.colornames[values[0]], lw = 2)
             background = plt.Rectangle([1e-2 * (minplot - border - count_labels * labelsize), ypos - .4], 1e-2*(count_labels*labelsize + maxplot + border - minplot), .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
             ax.add_patch(background)
             for i in range(count_labels):
@@ -553,12 +558,11 @@ class CrossValidation(object):
         measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros)
         colornames      = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
         colornames      = [cn for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
-        measurecolors   = {l1:colornames[i % len(colornames)] for i,l1 in enumerate(measure_effects[measure_effects.columns[0]].unique())}
         
         # actual plotting including vertical lines
         fig,ax = plt.subplots(figsize = figsize)
         for j,(index,values) in enumerate(measure_effects.iterrows()):
-            PlotRow(ax, ypos = -j,values = values, color = measurecolors[values[0]], textbreak = textbreak)
+            PlotRow(ax, ypos = -j,values = values, color = self.colornames[values[0]], textbreak = textbreak)
         for x in blacklines:
             ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
             ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
