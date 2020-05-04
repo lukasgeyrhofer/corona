@@ -31,6 +31,7 @@ class CrossValidation(object):
         self.__cvres_filename           = kwargs.get('CVResultsFilename',None)
         self.__external_regrDF_files    = kwargs.get('ExternalRegrDF',{})
         self.__external_observable_file = kwargs.get('ExternalObservableFile',None)
+        self.colornames                 = kwargs.get('ColorNames',None)
         
         # load data from DB files
         self.jhu_data          = cdc.CoronaData(**kwargs)
@@ -59,8 +60,9 @@ class CrossValidation(object):
     
         self.__kwargs_for_pickle = kwargs
         
-        self.colornames = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b'] # Amelie's color scheme
-        self.colornames = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
+        #self.colornames = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b'] # Amelie's color scheme
+        if self.colornames is None:
+            self.colornames = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
         self.L1colors   = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount)['Measure_L1'].unique())}
         
         
