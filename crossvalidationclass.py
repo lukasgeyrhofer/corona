@@ -31,6 +31,7 @@ class CrossValidation(object):
         self.__cvres_filename           = kwargs.get('CVResultsFilename',None)
         self.__external_regrDF_files    = kwargs.get('ExternalRegrDF',{})
         self.__external_observable_file = kwargs.get('ExternalObservableFile',None)
+        self.__observable_name          = kwargs.get('ObservableName','Confirmed')
         self.colornames                 = kwargs.get('ColorNames',None)
         
         # load data from DB files
@@ -92,7 +93,7 @@ class CrossValidation(object):
     
     def GetObservable(self, country):
         if not self.__UseExternalObs:
-            observable = self.jhu_data.CountryGrowthRates(country = country)['Confirmed'].values 
+            observable = self.jhu_data.CountryGrowthRates(country = country)[self.__observable_name].values 
             
             startdate, startindex     = '22/1/2020', 0
             if not self.__MinCaseCount is None:
