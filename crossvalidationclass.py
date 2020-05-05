@@ -259,6 +259,7 @@ class CrossValidation(object):
 
     def ProcessCVresults(self, CVresults = None):
         if CVresults is None: CVresults = self.__CVresults
+        CVresults['alpha'] = CVresults['alpha'].map('{:.6e}'.format) # convert alpha to a format that can be grouped properly
         CVresults =  CVresults.groupby(['shiftdays','alpha'], as_index = False).agg(
             { 'Loglike Test':['mean','std'],
               'Loglike Training':['mean','std'],
@@ -279,6 +280,7 @@ class CrossValidation(object):
                               'Test Sample Size',
                               'Training Sample Size'
                             ]
+        CVresults['alpha'] = CVresults['alpha'].astype(np.float64) # return to numbers
         CVresults.sort_values(by = ['shiftdays','alpha'], inplace = True)
         return CVresults
 
@@ -398,8 +400,11 @@ class CrossValidation(object):
         fig,axes = plt.subplots(len(shiftdaylist),1,figsize=figsize)
         ax_index = 0
         
-        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MeasureMinCount).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0).groupby(by = ['shiftdays','alpha'],as_index=False)
-
+        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MeasureMinCount).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
+        grouped_parameters['alpha'] = grouped_parameters['alpha'].map('{:.6e}'.format)
+        grouped_parameters = grouped_parameters.groupby(by = ['shiftdays','alpha'],as_index=False)
+        grouped_parameters['alpha'] = grouped_parameters['alpha'].astype(np.float64)
+    
         median_measures = grouped_parameters.quantile(.5)
         low_measures    = grouped_parameters.quantile(.025)
         high_measures   = grouped_parameters.quantile(.975)
@@ -410,7 +415,10 @@ class CrossValidation(object):
             countrycolor    = '#777777'
             countrylist     = pd.DataFrame({'Country':[country for country in restrictedCV.columns if country[:3] == 'C(C']})
 
-            grouped_country = countrylist.merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0).groupby(by = ['shiftdays','alpha'],as_index=False)
+            grouped_country = countrylist.merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
+            grouped_country['alpha'] = grouped_country['alpha'].map('{:.6e}'.format)
+            grouped_country = grouped_country.groupby(by = ['shiftdays','alpha'],as_index=False)
+            grouped_country['alpha'] = grouped_country['alpha'].astype(np.float64)
 
             median_country  = grouped_country.quantile(.5)
             low_country     = grouped_country.quantile(.025)
