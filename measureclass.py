@@ -110,7 +110,7 @@ class COVID19_measures(object):
                                                    'CountryCodes':        'iso',
                                                    'DownloadURL':         'https://www.who.int/docs/default-source/documents/phsm/phsm-who.zip',
                                                    'DatafileName':        'who_phsm.csv',
-                                                   'MaxMeasureLevel':      3,
+                                                   'MaxMeasureLevel':      2,
                                                    'DatafileReadOptions': {'encoding':'latin-1'}}
                                     }
 
@@ -155,8 +155,14 @@ class COVID19_measures(object):
         return str(os.path.splitext(self.__datasourceinfo[datasource]['DatafileName'])[1]).strip('.').upper()
 
 
+
+    
+    
     
     def ReadData(self):
+        def CleanWHOName(name):
+            return name.replace('nan -- ','').replace(' -- nan','')
+        
         if not os.path.exists(self.__datasourceinfo[self.__datasource]['DatafileName']) or self.__downloaddata:
             self.DownloadData()
         
@@ -202,9 +208,13 @@ class COVID19_measures(object):
             self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
         
         elif self.__datasource == 'WHOPHSM':
-            self.__data = readdata[[self.__countrycolumn,'date_start','who_category','who_subcategory','who_measure']].copy(deep = True)
-            self.__data.columns = [self.__countrycolumn,'Date','Measure_L1','Measure_L2','Measure_L3']
+            self.__data = readdata[[self.__countrycolumn,'date_start','who_category']].copy(deep = True)
+            self.__data.columns = [self.__countrycolumn,'Date','Measure_L1']
+            self.__data['Measure_L2'] = (readdata['who_subcategory'].astype(str) + ' -- ' + readdata['who_measure'].astype(str)).apply(CleanWHOName)
+            # some cleanup, might not be enough
             self.__data.dropna(subset = ['Date'], inplace = True)
+            self.__data.drop(self.__data[self.__data['Measure_L2'] == 'nan'].index, inplace = True)
+            self.__data.drop(self.__data[self.__data['Measure_L2'] == 'unkown -- unknown'].index, inplace = True)
             self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
         
         else:
