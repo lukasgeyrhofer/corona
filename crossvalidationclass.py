@@ -33,6 +33,7 @@ class CrossValidation(object):
         self.__external_observable_file = kwargs.get('ExternalObservableFile',None)
         self.__observable_name          = kwargs.get('ObservableName','Confirmed')
         self.colornames                 = kwargs.get('ColorNames',None)
+        self.__maxlen                   = kwargs.get('MaxObservableLength',None)
         
         # load data from DB files
         self.jhu_data          = cdc.CoronaData(**kwargs)
