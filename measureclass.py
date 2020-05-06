@@ -292,7 +292,7 @@ class COVID19_measures(object):
             for implementtime in implementlist:
                 measuredays = (implementtime - starttime).days
                 if measuredays+shiftdays < len(vec):
-                    vec[measuredata+shiftdays] = 1
+                    vec[measuredays+shiftdays] = 1
         else:
             measuredays = (implementlist[0] - starttime).days
             vec[min(measuredays+shiftdays,len(vec)-1):] = 1
