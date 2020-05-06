@@ -389,7 +389,7 @@ class CrossValidation(object):
     
     
     
-    def PlotCVevaluation(self, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10)):
+    def PlotCVAlphaSweep(self, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10),verticallines = []):
         if isinstance(shiftdays,int):
             shiftdaylist = [shiftdays]
         elif isinstance(shiftdays,(tuple,list,np.ndarray)):
@@ -403,11 +403,18 @@ class CrossValidation(object):
         grouped_parameters = self.measure_data.MeasureList(mincount = self.__MeasureMinCount).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
         grouped_parameters['alpha'] = grouped_parameters['alpha'].map('{:.6e}'.format)
         grouped_parameters = grouped_parameters.groupby(by = ['shiftdays','alpha'],as_index=False)
-        grouped_parameters['alpha'] = grouped_parameters['alpha'].astype(np.float64)
     
         median_measures = grouped_parameters.quantile(.5)
         low_measures    = grouped_parameters.quantile(.025)
         high_measures   = grouped_parameters.quantile(.975)
+
+        median_measures['alpha'] = median_measures['alpha'].astype(np.float64)
+        low_measures['alpha']    = low_measures['alpha'].astype(np.float64)
+        high_measures['alpha']   = high_measures['alpha'].astype(np.float64)
+
+        median_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
+        low_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
+        high_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
 
         measuredict = {index:l1name for index,l1name in self.measure_data.MeasureList(mincount = self.__MeasureMinCount)['Measure_L1'].items()}
         
@@ -418,11 +425,19 @@ class CrossValidation(object):
             grouped_country = countrylist.merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
             grouped_country['alpha'] = grouped_country['alpha'].map('{:.6e}'.format)
             grouped_country = grouped_country.groupby(by = ['shiftdays','alpha'],as_index=False)
-            grouped_country['alpha'] = grouped_country['alpha'].astype(np.float64)
 
             median_country  = grouped_country.quantile(.5)
             low_country     = grouped_country.quantile(.025)
             high_country    = grouped_country.quantile(.975)
+
+            median_country['alpha'] = median_country['alpha'].astype(np.float64)
+            low_country['alpha']    = low_country['alpha'].astype(np.float64)
+            high_country['alpha']   = high_country['alpha'].astype(np.float64)
+
+            median_country.sort_values(by = ['shiftdays','alpha'],inplace = True)
+            low_country.sort_values(by = ['shiftdays','alpha'],inplace = True)
+            high_country.sort_values(by = ['shiftdays','alpha'],inplace = True)
+
 
         for shiftdays in shiftdaylist:
             if shiftdays in self.CVresults['shiftdays']:
@@ -455,6 +470,9 @@ class CrossValidation(object):
                 legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.L1colors.items()]
                 if country_effects:
                     legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
+                
+                for alpha in verticallines:
+                    ax.vline(x,zorder = 0, lw = 2, alpha = .5, c = '#000000')
                 
                 ax.legend(handles = legendhandles )
                 ax.set_xlabel(r'Penalty Parameter $\alpha$')
