@@ -275,7 +275,7 @@ class COVID19_measures(object):
     
     
 
-    def dates2vector(self, implementdate, start = '22/1/2020', end = None, shiftdays = 0, maxlen = None, datefmt = '%d/%m/%Y', only_pulse = False):
+    def dates2vector(self, implementdate, start = '22/1/2020', end = None, shiftdays = 0, maxlen = None, datefmt = '%d/%m/%Y', only_pulse = False, binary_output = False):
         # generate vector of 0s and 1s when measure is implemented or not
         # or, when 'only_pulse == True', then output 1 only at dates of implementation
         starttime     = datetime.datetime.strptime(start,         datefmt)
@@ -314,9 +314,9 @@ class COVID19_measures(object):
 
 
 
-    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = True, only_pulse = False, binary_output = False):
+    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = True, only_pulse = False, binary_output = False, extend_measure_names = False):
         if country in self.__countrylist:
-            countrydata  = self.CountryData(country = country, measure_level = measure_level, only_first_dates = False)
+            countrydata  = self.CountryData(country = country, measure_level = measure_level, only_first_dates = False, extend_measure_names = extend_measure_names)
             ret_imptable = pd.DataFrame( { self.CleanUpMeasureName(measurename, clean_up = clean_measurename):
                                            self.dates2vector(implemented, start = startdate, end = enddate, shiftdays = shiftdays, maxlen = maxlen, only_pulse = only_pulse, binary_output = binary_output)
                                            for measurename, implemented in countrydata.items() } )
