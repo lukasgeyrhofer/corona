@@ -4,7 +4,7 @@ import os
 import datetime
 import re
 import urllib.request
-
+import zipfile
 
 class COVID19_measures(object):
     '''
@@ -83,7 +83,7 @@ class COVID19_measures(object):
         self.__dateformat         = kwargs.get('dateformat',           '%d/%m/%Y')
         self.__removedcountries   = []
         
-        self.__datasource         = (kwargs.get('datasource','CSH')).upper()
+        self.__datasource         = kwargs.get('datasource','CSH').upper()
         self.__datasourceinfo     = {   'CSH':    {'dateformat':          '%Y-%m-%d',
                                                    'Country':             'Country',
                                                    'CountryCodes':        'iso3c',
@@ -104,7 +104,14 @@ class COVID19_measures(object):
                                                    'MaxMeasureLevel':     2,
                                                    'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/20200423_acaps_-_covid-19_goverment_measures_dataset_v10.xlsx',
                                                    'DatafileName':        'ACAPS_covid19_measures.xlxs',
-                                                   'DatafileReadOptions': {'sheet_name':'Database'}}
+                                                   'DatafileReadOptions': {'sheet_name':'Database'}},
+                                        'WHOPHSM':{'dateformat':          '%d/%m/%Y',
+                                                   'Country':             'country_territory_area',
+                                                   'CountryCodes':        'iso',
+                                                   'DownloadURL':         'https://www.who.int/docs/default-source/documents/phsm/phsm-who.zip',
+                                                   'DatafileName':        'who_phsm.csv',
+                                                   'MaxMeasureLevel':      3,
+                                                   'DatafileReadOptions': {'encoding':'latin-1'}}
                                     }
 
         self.__update_dsinfo = kwargs.get('datasourceinfo',None)
@@ -125,9 +132,17 @@ class COVID19_measures(object):
 
 
 
-
     def DownloadData(self):
         urllib.request.urlretrieve(self.__datasourceinfo[self.__datasource]['DownloadURL'],self.__datasourceinfo[self.__datasource]['DatafileName'])
+
+        # download for WHO PHSM comes as zipfile. need to extract file first
+        if self.__datasource == 'WHOPHSM':
+            who_archive = zipfile.ZipFile('phsm-who.zip')
+            for fileinfo in who_archive.infolist():
+                if '.csv' in fileinfo.filename:
+                    who_archive.extract(fileinfo)
+                    who_filename = fileinfo.filename
+            os.rename(who_filename,self.__datasourceinfo['WHOPHSM']['DatafileName'])
 
 
     
@@ -185,6 +200,12 @@ class COVID19_measures(object):
             self.__data.columns = [self.__countrycolumn,'Date', 'Measure_L1', 'Measure_L2']
             self.__data.dropna(inplace = True)
             self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
+        
+        elif self.__datasource == 'WHOPHSM':
+            self.__data = readdata[[self.__countrycolumn,'date_start','who_category','who_subcategory','who_measure']].copy(deep = True)
+            self.__data.columns = [self.__countrycolumn,'Date','Measure_L1','Measure_L2','Measure_L3']
+            self.__data.dropna(subset = ['Date'], inplace = True)
+            self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
         
         else:
             NotImplementedError
