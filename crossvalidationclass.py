@@ -53,7 +53,7 @@ class CrossValidation(object):
             self.__ExternalObservables = pd.read_csv(self.__external_observable_file)
         
         # set up internal storage
-        self.__CVresults     = None
+        self.CVresults     = None
         self.__regrDF        = {}
     
         if not self.__cvres_filename is None:
@@ -233,32 +233,32 @@ class CrossValidation(object):
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, 'computing'), end = '\r', flush = True)
             
             curResDF         = self.SingleParamCV(shiftdays = shiftdays, alpha = alpha, crossvalcount = crossvalcount, outputheader = outputheader, L1_wt = L1_wt)
-            self.__CVresults = self.addDF(self.__CVresults,curResDF)
+            self.CVresults = self.addDF(self.CVresults,curResDF)
             
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, datetime.datetime.now().strftime('%H:%M:%S')))
             
 
 
     def SaveCVResults(self, filename = None, reset = False):
-        if (not filename is None) and (not self.__CVresults is None):
-            self.__CVresults.to_csv(filename)
+        if (not filename is None) and (not self.CVresults is None):
+            self.CVresults.to_csv(filename)
             if self.__verbose: print('# saving CV results as "{}"'.format(filename))
-        if reset:   self.__CVresults = None
+        if reset:   self.CVresults = None
 
 
 
     def LoadCVResults(self, filename, reset = True):
         if os.path.exists(filename):
             if self.__verbose:print('# loading CV results from "{}"'.format(filename))
-            if reset:   self.__CVresults = pd.read_csv(filename,index_col = 0)
-            else:       self.__CVresults = self.addDF(pd.read_csv(filename,index_col = 0))
+            if reset:   self.CVresults = pd.read_csv(filename,index_col = 0)
+            else:       self.CVresults = self.addDF(self.CVresults,pd.read_csv(filename,index_col = 0))
         else:
             raise IOError
 
 
 
     def ProcessCVresults(self, CVresults = None):
-        if CVresults is None: CVresults = self.__CVresults
+        if CVresults is None: CVresults = self.CVresults.copy(deep = True)
         CVresults['alpha'] = CVresults['alpha'].map('{:.6e}'.format) # convert alpha to a format that can be grouped properly
         CVresults =  CVresults.groupby(['shiftdays','alpha'], as_index = False).agg(
             { 'Loglike Test':['mean','std'],
@@ -586,18 +586,11 @@ class CrossValidation(object):
     # ** python stuff
     # ************************************************************************************
 
-        
-    def __getattr__(self,key):
-        if key == 'CVresults':
-            return self.__CVresults
-
-
-
     # make CrossValidation object pickleable ...
     # (getstate, setstate) interacts with (pickle.dump, pickle.load)
     def __getstate__(self):
         return {'kwargs':          self.__kwargs_for_pickle,
-                'CVresults':       self.__CVresults,
+                'CVresults':       self.CVresults,
                 'finalModels':     self.finalModels,
                 'finalResults':    self.finalResults,
                 'finalCV':         self.finalCV,
@@ -605,7 +598,7 @@ class CrossValidation(object):
     
     def __setstate__(self,state):
         self.__init__(**state['kwargs'])
-        self.__CVresults      = state['CVresults']
+        self.CVresults      = state['CVresults']
         self.finalModels      = state['finalModels']
         self.finalResults     = state['finalResults']
         self.finalCV          = state['finalCV']
