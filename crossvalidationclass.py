@@ -27,7 +27,7 @@ class CrossValidation(object):
     def __init__(self, **kwargs):
         self.__MinCaseCount             = kwargs.get('MinCases', 30) # start trajectories with at least 30 confirmed cases
         self.__MeasureMinCount          = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
-        self.__verbose                  = kwargs.get('verbose', False)
+        self.__verbose                  = kwargs.get('verbose', True)
         self.__cvres_filename           = kwargs.get('CVResultsFilename',None)
         self.__external_observable_file = kwargs.get('ExternalObservableFile',None)
         self.__external_indicators_file = kwargs.get('ExternalIndicatorsFile',None)
