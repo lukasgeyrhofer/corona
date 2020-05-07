@@ -47,30 +47,31 @@ class CrossValidation(object):
         self.measure_data.RenameCountry('Taiwan', 'Taiwan*')
         
         
-        self.__UseExternalObs = False
+        self.__UseExternalObs            = False
         if not self.__external_observable_file is None:
-            self.__UseExternalObs = True
-            self.__ExternalObservables = pd.read_csv(self.__external_observable_file)
+            self.__UseExternalObs        = True
+            self.__ExternalObservables   = pd.read_csv(self.__external_observable_file)
         
-        self.__UseExternalIndicators = False
+        self.__UseExternalIndicators     = False
         if not self.__external_indicators_file is None:
             self.__UseExternalIndicators = True
-            self.__ExternalIndicators = pd.read_csv(self.__external_indicators_file)
+            self.__ExternalIndicators    = pd.read_csv(self.__external_indicators_file, index_col = 'Country')
+            self.ExternalIndicatorsNames = pd.DataFrame({'Indicator':list(self.__ExternalIndicators.columns)})
+            self.ExternalIndicatorsNames.index = [self.measure_data.CleanUpMeasureName(indicator) for indicator in self.ExternalIndicatorsNames['Indicator']]
         
         # set up internal storage
-        self.CVresults     = None
-        self.__regrDF        = {}
+        self.CVresults                   = None
+        self.__regrDF                    = {}
     
         if not self.__cvres_filename is None:
             self.LoadCVResults(filename = self.__cvres_filename)
     
-        self.__kwargs_for_pickle = kwargs
-        
         #self.colornames = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b'] # Amelie's color scheme
         if self.colornames is None:
             self.colornames = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
         self.L1colors   = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount, enddate = self.__finaldate)['Measure_L1'].unique())}
         
+        self.__kwargs_for_pickle         = kwargs
         
         
     
@@ -150,6 +151,13 @@ class CrossValidation(object):
                 
                 DF_country['Country']     = str(country)
                 DF_country['Observable']  = observable
+                
+                if self.__UseExternalIndicators:
+                    for indicator in self.ExternalIndicatorsNames.iterrows():
+                        if country in self.__ExternalIndicators.index:
+                            DF_country[indicator[0]] = self.__ExternalIndicators.loc[country,indicator[1][0]]
+                        else:
+                            DF_country[indicator[0]] = 0
 
                 regressionDF = self.addDF(regressionDF,DF_country)
 
