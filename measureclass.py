@@ -295,7 +295,7 @@ class COVID19_measures(object):
             endtime   = datetime.datetime.strptime(end,           datefmt)
         implementlist = [datetime.datetime.strptime(date, datefmt) for date in self.SortDates(implementdate)]
 
-        totaldays   = (endtime - starttime).days
+        totaldays   = (endtime - starttime).days + 1
         vec         = np.zeros(totaldays)
 
         if only_pulse:
@@ -305,7 +305,8 @@ class COVID19_measures(object):
                     vec[measuredays+shiftdays] = 1
         else:
             measuredays = (implementlist[0] - starttime).days
-            vec[min(measuredays+shiftdays,len(vec)-1):] = 1
+            if measuredays + shiftdays < len(vec):
+                vec[measuredays+shiftdays:] = 1
             
         if not maxlen is None:
             vec     = vec[:min(maxlen,len(vec))]

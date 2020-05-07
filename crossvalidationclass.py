@@ -29,29 +29,33 @@ class CrossValidation(object):
         self.__MeasureMinCount          = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
         self.__verbose                  = kwargs.get('verbose', False)
         self.__cvres_filename           = kwargs.get('CVResultsFilename',None)
-        self.__external_regrDF_files    = kwargs.get('ExternalRegrDF',{})
         self.__external_observable_file = kwargs.get('ExternalObservableFile',None)
+        self.__external_indicators_file = kwargs.get('ExternalIndicatorsFile',None)
         self.__observable_name          = kwargs.get('ObservableName','Confirmed')
-        self.colornames                 = kwargs.get('ColorNames',None)
         self.__maxlen                   = kwargs.get('MaxObservableLength',None)
+        self.__finaldate                = kwargs.get('FinalDate',None)
+        self.colornames                 = kwargs.get('ColorNames',None)
+        
         
         # load data from DB files
         self.jhu_data          = cdc.CoronaData(**kwargs)
         self.measure_data      = mc.COVID19_measures(**kwargs)        
         self.measure_data.RemoveCountry('Diamond Princess')
-        self.measure_data.RenameCountry('France (metropole)', 'France')
         self.measure_data.RenameCountry('South Korea', 'Korea, South')
         self.measure_data.RenameCountry('Czech Republic', 'Czechia')
+        self.measure_data.RenameCountry('Republic of Ireland', 'Ireland')
+        self.measure_data.RenameCountry('Taiwan', 'Taiwan*')
+        
         
         self.__UseExternalObs = False
-        self.__UseExternalRegrDF = False
-        if len(self.__external_regrDF_files) > 0:
-            for shiftday,filename in self.__external_regrDF_files.items():
-                self.__regrDF[shiftday] = pd.read_csv(filename)
-            self.__UseExternalRegrDF = True
-        elif not self.__external_observable_file is None:
+        if not self.__external_observable_file is None:
             self.__UseExternalObs = True
             self.__ExternalObservables = pd.read_csv(self.__external_observable_file)
+        
+        self.__UseExternalIndicators = False
+        if not self.__external_indicators_file is None:
+            self.__UseExternalIndicators = True
+            self.__ExternalIndicators = pd.read_csv(self.__external_indicators_file)
         
         # set up internal storage
         self.CVresults     = None
@@ -96,22 +100,28 @@ class CrossValidation(object):
         if not self.__UseExternalObs:
             observable = self.jhu_data.CountryGrowthRates(country = country)[self.__observable_name].values 
             
-            startdate, startindex     = '22/1/2020', 0
+            startdate                 = self.jhu_data.DateStart(country = country)
             if not self.__MinCaseCount is None:
                 startdate, startindex = self.jhu_data.DateAtCases(country = country, cases = self.__MinCaseCount, outputformat = '%d/%m/%Y', return_index = True)
                 observable            = observable[startindex:]
 
-            if not self.__maxlen is None:
-                observable            = observable[:np.min([self.__maxlen,len(observable) + 1])]
-            
         else:
             # import from Nils' files
-            c_index    = np.array(self.__ExternalObservables['country'] == country)
-            observable = self.__ExternalObservables[c_index]['Median(R)'].values[1:] # first entry is usually 0
-            startdate  = (datetime.datetime.strptime(self.__ExternalObservables[c_index]['startdate'].values[0],'%Y-%m-%d') + datetime.timedelta(days = 1)).strftime('%d/%m/%Y')            
-            startindex = (datetime.datetime.strptime(startdate,'%d/%m/%Y') - datetime.datetime.strptime('22/1/2020','%d/%m/%Y')).days
-            
-        return observable, startdate, startindex
+            c_index               = np.array(self.__ExternalObservables['country'] == country)
+            observable            = self.__ExternalObservables[c_index]['Median(R)'].values[1:] # first entry is usually 0
+            startdate             = (datetime.datetime.strptime(self.__ExternalObservables[c_index]['startdate'].values[0],'%Y-%m-%d') + datetime.timedelta(days = 1)).strftime('%d/%m/%Y')            
+            startindex            = (datetime.datetime.strptime(startdate,'%d/%m/%Y') - datetime.datetime.strptime('22/1/2020','%d/%m/%Y')).days
+        
+        if not self.__maxlen is None:
+            observable            = observable[:np.min([self.__maxlen,len(observable) + 1])]
+
+        if not self.__finaldate is None:
+            maxlen                = (datetime.datetime.strptime(self.__finaldate,'%d/%m/%Y') - datetime.datetime.strptime(starttime,'%d/%m/%Y')).days
+            observable            = observable[:np.min([maxlen,len(observable)+1])]
+        
+        enddate                   = (datetime.datetime.strptime(startdate,'%d/%m/%Y') + datetime.timedelta(days = len(observable) - 1)).strftime('%d/%m/%Y')
+        
+        return observable, startdate, enddate
     
     
     
@@ -125,15 +135,13 @@ class CrossValidation(object):
         for country in countrylist:
             if (country in self.measure_data.countrylist) and self.HaveCountryData(country):
                 
-                observable, startdate, startindex = self.GetObservable(country)
-                obslen                            = len(observable)
+                observable, startdate, enddate = self.GetObservable(country)
                 
                 DF_country = self.measure_data.ImplementationTable(country           = country,
                                                                    measure_level     = 2,
                                                                    startdate         = startdate,
-                                                                   enddate           = self.jhu_data.FinalDate(country),
+                                                                   enddate           = enddate,
                                                                    shiftdays         = shiftdays,
-                                                                   maxlen            = obslen,
                                                                    clean_measurename = True)
                 # remove measures not in list
                 for measurename in DF_country.columns:
@@ -154,10 +162,7 @@ class CrossValidation(object):
     
     def RegressionDF(self,shiftdays = 0):
         if not shiftdays in self.__regrDF.keys():
-            if not self.__UseExternalRegrDF:
-                self.__regrDF[shiftdays] = self.GenerateRDF(shiftdays = shiftdays)
-            else:
-                raise IOError('Did not load external RegrDF for shiftdays = {}'.format(shiftdays))
+            self.__regrDF[shiftdays] = self.GenerateRDF(shiftdays = shiftdays)
         return self.__regrDF[shiftdays]
     
     

@@ -57,9 +57,6 @@ class CoronaData(object):
         self.LoadData()
 
 
-    def ConvertDates(self,datelist):
-        return np.array([datetime.datetime.strptime(date,self.__input_dateformat).strftime(self.__output_dateformat) for date in datelist])
-
 
     def LoadData(self):
         
@@ -74,7 +71,7 @@ class CoronaData(object):
         self.__countrylist.sort()
         
         for country in self.__countrylist:
-            tmp_dates     = self.ConvertDates(self.__data_confirmed.columns[5:])
+            tmp_dates     = self.ConvertDates(self.__data_confirmed.columns[5:], inputformat = self.__input_dateformat)
             tmp_confirmed = np.array(((self.__data_confirmed[self.__data_confirmed['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
             tmp_deaths    = np.array(((self.__data_death    [self.__data_death    ['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
             tmp_recovered = np.array(((self.__data_recovered[self.__data_recovered['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
@@ -82,10 +79,12 @@ class CoronaData(object):
             self.AddCountryData(country, tmp_dates, tmp_confirmed, tmp_deaths, tmp_recovered)
 
 
+
     def AddCountryData(self,countryname, dates, confirmed, deaths, recovered):
         self.__data[countryname] = pd.DataFrame({ 'Date': dates, 'Confirmed': confirmed, 'Deaths': deaths, 'Recovered': recovered})
         if len(dates) > self.__maxtrajectorylength:
             self.__maxtrajectorylength = len(dates)
+
 
 
     def DownloadData(self):
@@ -98,16 +97,41 @@ class CoronaData(object):
         data_deaths.to_csv(self.DEATH)
         data_recovered.to_csv(self.RECOVERED)
     
+
     
+    def ConvertDates(self, datelist, outputformat = None, inputformat = None):
+        if outputformat is None: outputformat = self.__output_dateformat
+        if inputformat  is None: inputformat  = self.__output_dateformat
+        return np.array([datetime.datetime.strptime(date, inputformat).strftime(outputformat) for date in datelist])
+
+
+
     def DateAtCases(self, country, cases = 1, column = 'Confirmed', return_index = False, outputformat = None):
         if outputformat is None: outputformat = self.__output_dateformat
         cd = self.CountryData(country)
         index = int(np.argmin(cd[column].values <= cases))
-        casetime = datetime.datetime.strptime('22/1/2020','%d/%m/%Y') + datetime.timedelta(days = index)
+        casetime = datetime.datetime.strptime(self.DateStart(country),self.__output_dateformat) + datetime.timedelta(days = index)
         if return_index:
             return datetime.datetime.strftime(casetime,outputformat),index
         else:
             return datetime.datetime.strftime(casetime,outputformat)
+
+
+    
+    def DateStart(self, country, outputformat = None):
+        if country in self.__countrylist:
+            return self.__data[country]['Date'].values[0]
+        else:
+            return None
+
+
+
+    def DateFinal(self, country, outputformat = None):
+        if country in self.countrylist:
+            return self.__data[country]['Date'].values[-1]
+        else:
+            return None
+
 
 
     def CountryData(self, country, windowsize = None, stddev = None):
@@ -123,6 +147,7 @@ class CoronaData(object):
             return self.__data[country]
         else:
             return None
+
 
 
     def CountryGrowthRates(self, country = None, windowsize = None, stddev = None):
@@ -149,9 +174,8 @@ class CoronaData(object):
             return None
 
 
-    def FinalDate(self,country):
-        if country in self.countrylist:
-            return self.__data[country]['Date'].tail(1).values[0]
+
+
         
 
     def __getattr__(self,key):
