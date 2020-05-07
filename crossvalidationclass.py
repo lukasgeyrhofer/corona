@@ -69,7 +69,7 @@ class CrossValidation(object):
         #self.colornames = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b'] # Amelie's color scheme
         if self.colornames is None:
             self.colornames = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
-        self.L1colors   = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount)['Measure_L1'].unique())}
+        self.L1colors   = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount, enddate = self.__finaldate)['Measure_L1'].unique())}
         
         
         
@@ -130,7 +130,7 @@ class CrossValidation(object):
             countrylist = self.measure_data.countrylist
         
         regressionDF    = None
-        measurelist    = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2)
+        measurelist    = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2, enddate = self.__finaldate)
 
         for country in countrylist:
             if (country in self.measure_data.countrylist) and self.HaveCountryData(country):
@@ -321,7 +321,7 @@ class CrossValidation(object):
             finalCVrelative                = finalCVrelative.quantile([.5,.025,.975]).T
             finalCVrelative.columns        = ['median', 'low', 'high']            
             if drop_zeros: finalCVrelative = finalCVrelative[(finalCVrelative['median'] != 0) | (finalCVrelative['low'] != 0) | (finalCVrelative['high'] != 0)]
-            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MeasureMinCount).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
+            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
             fCV_withNames.sort_values(by   = ['median','high'], inplace = True)
             
             return fCV_withNames
@@ -406,7 +406,7 @@ class CrossValidation(object):
         fig,axes = plt.subplots(len(shiftdaylist),1,figsize=figsize)
         ax_index = 0
         
-        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MeasureMinCount).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
+        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
         grouped_parameters['alpha'] = grouped_parameters['alpha'].map('{:.6e}'.format)
         grouped_parameters = grouped_parameters.groupby(by = ['shiftdays','alpha'],as_index=False)
     
@@ -422,7 +422,7 @@ class CrossValidation(object):
         low_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
         high_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
 
-        measuredict = {index:l1name for index,l1name in self.measure_data.MeasureList(mincount = self.__MeasureMinCount)['Measure_L1'].items()}
+        measuredict = {index:l1name for index,l1name in self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate)['Measure_L1'].items()}
         
         if country_effects:
             countrycolor    = '#777777'
@@ -502,7 +502,7 @@ class CrossValidation(object):
         colornames  = ['gray','#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
 
         # collect measure names for labels
-        measurelist = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2)
+        measurelist = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2, enddate = self.__finaldate)
         countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
         modelcount  = len(self.finalModels)
         intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
