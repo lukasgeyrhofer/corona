@@ -146,8 +146,10 @@ class COVID19_measures(object):
 
 
     
-    def convertDate(self,datestr):
-        return datetime.datetime.strptime(str(datestr),self.__datasourceinfo[self.__datasource]['dateformat']).strftime(self.__dateformat)
+    def convertDate(self,datestr, inputformat = None, outputformat = None):
+        if inputformat is None: inputformat = self.__datasourceinfo[self.__datasource]['dateformat']
+        if outputformat is None: outputformat = self.__dateformat
+        return datetime.datetime.strptime(str(datestr),inputformat).strftime(outputformat)
 
 
 
@@ -348,12 +350,15 @@ class COVID19_measures(object):
     
     
     
-    def MeasureList(self, countrylist = None, measure_level = None, mincount = None):
+    def MeasureList(self, countrylist = None, measure_level = None, mincount = None, enddate = None):
         if measure_level is None: measure_level = self.__measurelevel
         if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']: measure_level = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
 
+        if enddate is None: enddate = datetime.datetime.today().strftime(self.__dateformat)
         mheaders = ['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]
-        measurenameDF = pd.DataFrame(self.__data[mheaders + [self.__countrycolumn]]).replace(np.nan,'',regex=True)
+        measurenameDF = pd.DataFrame(self.__data[mheaders + [self.__countrycolumn,'Date']]).replace(np.nan,'',regex=True)
+        measurenameDF.drop(measurenameDF[measurenameDF['Date'].astype(np.datetime64) <=  np.datetime64(self.convertDate(enddate,inputformat = self.__dateformat,outputformat='%Y-%m-%d'))].index,inplace=True)
+        measurenameDF.drop('Date',axis = 'columns', inplace = True)
         measurenameDF.drop_duplicates(inplace=True)
         if not countrylist is None: measurenameDF = measurenameDF[measurenameDF[self.__countrycolumn].isin(countrylist)]
         measurenameDF = measurenameDF.groupby(by = mheaders, as_index=False).count()
