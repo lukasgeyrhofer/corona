@@ -88,21 +88,21 @@ class COVID19_measures(object):
                                                    'Country':             'Country',
                                                    'CountryCodes':        'iso3c',
                                                    'MaxMeasureLevel':     4,
-                                                   'DownloadURL':         'https://raw.githubusercontent.com/amel-github/covid19-interventionmeasures/master/COVID19_non-pharmaceutical-interventions.csv',
+                                                   'DownloadURL':         'https://raw.githubusercontent.com/amel-github/covid19-interventionmeasures/master/COVID19_non-pharmaceutical-interventions_version2_utf8.csv',
                                                    'DatafileName':        'COVID19_non-pharmaceutical-interventions.csv',
                                                    'DatafileReadOptions': {'sep': ',', 'quotechar': '"', 'encoding': 'latin-1'}},
                                         'OXFORD': {'dateformat':          '%Y%m%d',
                                                    'Country':             'CountryName',
                                                    'CountryCodes':        'CountryCode',
                                                    'MaxMeasureLevel':     1,
-                                                   'DownloadURL':         'https://ocgptweb.azurewebsites.net/CSVDownload',
-                                                   'DatafileName':        'OxCGRT_Full.csv',
+                                                   'DownloadURL':         'https://raw.githubusercontent.com/OxCGRT/covid-policy-tracker/master/data/OxCGRT_latest.csv',
+                                                   'DatafileName':        'OxCGRT_latest.csv',
                                                    'DatafileReadOptions': {}},
                                         'ACAPS':  {'dateformat':          '%d/%m/%Y',
                                                    'Country':             'COUNTRY',
                                                    'CountryCodes':        'ISO',
                                                    'MaxMeasureLevel':     2,
-                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/20200423_acaps_-_covid-19_goverment_measures_dataset_v10.xlsx',
+                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/acaps_covid19_goverment_measures_dataset.xlsx',
                                                    'DatafileName':        'ACAPS_covid19_measures.xlxs',
                                                    'DatafileReadOptions': {'sheet_name':'Database'}},
                                         'WHOPHSM':{'dateformat':          '%d/%m/%Y',
@@ -187,7 +187,7 @@ class COVID19_measures(object):
             # in addition to columns 'S[NUMBER]_IsGeneral' and 'S[NUMBER]_Notes' for more info
             measurecolumns = []
             for mc in readdata.columns:
-                if not re.search('^S\d+\_',mc) is None:
+                if not re.search('^[CEH]\d+\_',mc) is None:
                     if mc[-7:].lower() != 'general' and mc[-5:].lower() != 'notes':
                         measurecolumns.append(mc)
             
