@@ -117,7 +117,7 @@ class CrossValidation(object):
             observable            = observable[:np.min([self.__maxlen,len(observable) + 1])]
 
         if not self.__finaldate is None:
-            maxlen                = (datetime.datetime.strptime(self.__finaldate,'%d/%m/%Y') - datetime.datetime.strptime(starttime,'%d/%m/%Y')).days
+            maxlen                = (datetime.datetime.strptime(self.__finaldate,'%d/%m/%Y') - datetime.datetime.strptime(startdate,'%d/%m/%Y')).days
             observable            = observable[:np.min([maxlen,len(observable)+1])]
         
         enddate                   = (datetime.datetime.strptime(startdate,'%d/%m/%Y') + datetime.timedelta(days = len(observable) - 1)).strftime('%d/%m/%Y')
