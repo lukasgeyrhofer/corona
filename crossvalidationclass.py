@@ -64,13 +64,13 @@ class CrossValidation(object):
         self.__regrDF                    = {}
     
         if not self.__cvres_filename is None:
-            self.LoadCVResults(filename = self.__cvres_filename)
+            self.LoadCVResults(filename  = self.__cvres_filename)
     
         #self.colornames = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b'] # Amelie's color scheme
         if self.colornames is None:
-            self.colornames = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
-        self.L1colors   = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount, enddate = self.__finaldate)['Measure_L1'].unique())}
-        
+            self.colornames              = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
+        self.L1colors                    = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount, enddate = self.__finaldate)['Measure_L1'].unique())}
+        self.L1colors['Country Effects'] = '#babdb6'
         self.__kwargs_for_pickle         = kwargs
         
         
@@ -322,16 +322,23 @@ class CrossValidation(object):
     
 
     
-    def GetMeasureEffects(self, drop_zeros = False, rescale = True):
+    def GetMeasureEffects(self, drop_zeros = False, rescale = True, include_countries = False):
         if not self.finalCV is None:
-            finalCVrelative                = self.finalCV.copy(deep=True).drop(columns = 'Test Countries', axis = 0)
+            finalCVrelative                = self.finalCV.copy(deep = True).drop(columns = 'Test Countries', axis = 0).fillna(0)
             if rescale: finalCVrelative    = finalCVrelative.divide(self.finalCV['Intercept'],axis = 0)
             finalCVrelative                = finalCVrelative.quantile([.5,.025,.975]).T
             finalCVrelative.columns        = ['median', 'low', 'high']            
             if drop_zeros: finalCVrelative = finalCVrelative[(finalCVrelative['median'] != 0) | (finalCVrelative['low'] != 0) | (finalCVrelative['high'] != 0)]
-            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
-            fCV_withNames.sort_values(by   = ['median','high'], inplace = True)
+            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate, measure_level = 2).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
+
+            if include_countries:
+                countryDF                  = pd.DataFrame({'Measure_L2':[country[13:].split(']')[0] for country in finalCVrelative.index if country[:3] == 'C(C']})
+                countryDF['Measure_L1']    = 'Country Effects'
+                countryDF.index            = [country for country in finalCVrelative.index if country[:3] == 'C(C']
+                fCV_withCountries          = countryDF.merge(finalCVrelative, how = 'inner', left_index = True, right_index = True)
+                fCV_withNames              = self.addDF(fCV_withNames,fCV_withCountries)
             
+            fCV_withNames.sort_values(by   = ['median','high','low'], inplace = True)
             return fCV_withNames
         else:
             return None
@@ -575,7 +582,7 @@ class CrossValidation(object):
         
 
 
-    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40):
+    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40, include_countries = False, rescale = True):
         # get plotting area
         minplot      = np.min(blacklines + graylines)
         maxplot      = np.max(blacklines + graylines)
@@ -591,7 +598,7 @@ class CrossValidation(object):
                 ax.annotate(textwrap.shorten(str(values[i]), width = textbreak), [1e-2*(minplot - (count_labels - i) * labelsize), ypos - .1])
 
         # setup
-        measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros)
+        measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros, include_countries = include_countries, rescale = rescale)
         
         # actual plotting including vertical lines
         fig,ax = plt.subplots(figsize = figsize)
