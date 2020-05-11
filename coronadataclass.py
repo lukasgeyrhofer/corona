@@ -51,6 +51,8 @@ class CoronaData(object):
         self.__output_dateformat = kwargs.get('DateFormat','%d/%m/%Y')
         self.__input_dateformat  = '%m/%d/%y'
         
+        self.__date_as_index     = kwargs.get('DateAsIndex',False)
+        
         if kwargs.get('download_data',False):
             self.DownloadData()
             
@@ -134,23 +136,29 @@ class CoronaData(object):
 
 
 
-    def CountryData(self, country, windowsize = None, stddev = None):
-        if windowsize is None: windowsize = self.__smooth_windowsize
-        if stddev     is None: stddev     = self.__smooth_stddev
-        
+    def CountryData(self, country, windowsize = None, stddev = None, dateasindex = None):
+        if windowsize  is None: windowsize  = self.__smooth_windowsize
+        if stddev      is None: stddev      = self.__smooth_stddev
+        if dateasindex is None: dateasindex = self.__date_as_index
         if country in self.__countrylist:
             if (not windowsize is None) and (not stddev is None):
                 if stddev > 0:
                     returnDF = self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev)
                     returnDF['Date'] = self.__data[country]['Date'].values
-                    return returnDF
-            return self.__data[country]
+                    if dateasindex:
+                        return returnDF.set_index('Date', drop = True)
+                    else:
+                        return returnDF
+            if dateasindex:
+                return self.__data[country].set_index('Date', drop = True)
+            else:
+                return self.__data[country]
         else:
             return None
 
 
 
-    def CountryGrowthRates(self, country = None, windowsize = None, stddev = None):
+    def CountryGrowthRates(self, country = None, windowsize = None, stddev = None, dateasindex = None):
         def GrowthRate(trajectory):
             storewarnings = np.seterr(invalid = 'ignore')
             growthrate = np.diff(np.log(trajectory))
@@ -159,8 +167,9 @@ class CoronaData(object):
             growthrate[growthrate > 1e300] = 0            
             return growthrate
 
-        if windowsize is None: windowsize = self.__smooth_windowsize
-        if stddev     is None: stddev     = self.__smooth_stddev
+        if windowsize  is None: windowsize  = self.__smooth_windowsize
+        if stddev      is None: stddev      = self.__smooth_stddev
+        if dateasindex is None: dateasindex = self.__date_as_index
 
         if country in self.__countrylist:
             returnDF = self.__data[country].apply({k:GrowthRate for k in self.__data[country].columns if k != 'Date'}) #.join(self.__data[country].Date)
@@ -169,7 +178,10 @@ class CoronaData(object):
                 if stddev > 0:
                     returnDF = returnDF.rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).join(self.__data[country].Date)
                     returnDF['Date'] = self.__data[country]['Date'].values[1:]
-            return returnDF
+            if dateasindex:
+                return returnDF.set_index('Date', drop = True)
+            else:
+                return returnDF
         else:
             return None
 
