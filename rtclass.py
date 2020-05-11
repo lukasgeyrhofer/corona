@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pickle
 
 from scipy import stats as sps
 from scipy.interpolate import interp1d
@@ -28,6 +29,7 @@ class Rtclass(object):
     
         self.rt        = {}
         
+        self.__kwargs_for_pickle = kwargs
     
     def highest_density_interval(self,pmf, p=.9, debug=False):
         # If we pass a DataFrame, just call this recursively on the columns
@@ -184,10 +186,12 @@ class Rtclass(object):
         
         for country in countrylist:
             posteriors       = self.results[country]['posteriors'][self.max_likelihood_index]
-            hdis_90          = self.highest_density_interval(posteriors, p=.9)
-            hdis_50          = self.highest_density_interval(posteriors, p=.5)
-            most_likely      = posteriors.idxmax().rename('ML')
-            self.rt[country] = pd.concat([most_likely, hdis_90, hdis_50], axis=1)
+            if len(posteriors) > 0:
+                hdis_90          = self.highest_density_interval(posteriors, p=.9)
+                hdis_50          = self.highest_density_interval(posteriors, p=.5)
+                most_likely      = posteriors.idxmax().rename('ML')
+                self.rt[country] = pd.concat([most_likely, hdis_90, hdis_50], axis=1)
+                self.rt[country]['Country'] = country
 
         return self.rt
 
@@ -197,4 +201,22 @@ class Rtclass(object):
     def __getattr__(self,key):
         if key == 'countrylist':
             return self.jhu_data.countrylist
+
+
+
+    def __getstate__(self):
+        return {'kwargs':  self.__kwargs_for_pickle,
+                'sigmas':  self.sigmas,
+                'results': self.result,
+                'rt':      self.rt,
+                'mlhi':    self.max_likelihood_index
+                }
+    
+    def __setstate__(self,state):
+        self.__init__(**state['kwargs'])
+        self.sigmas               = state['sigmas']
+        self.results              = state['results']
+        self.rt                   = state['rt']
+        self.max_likelihood_index = state['mlhi']
+
 
