@@ -81,6 +81,7 @@ class COVID19_measures(object):
         self.__extendmeasurenames = kwargs.get('extend_measure_names', False )
         self.__countrycodes       = kwargs.get('country_codes',        False )
         self.__dateformat         = kwargs.get('dateformat',           '%d/%m/%Y')
+        self.__resolve_US_states  = kwargs.get('resolve_US_states',    False)
         self.__removedcountries   = []
         
         self.__datasource         = kwargs.get('datasource','CSH').upper()
@@ -120,11 +121,15 @@ class COVID19_measures(object):
         
         # can switch internal declaration of countries completely to the ISO3C countrycodes
         # no full names of countries can be used then
-        if self.__countrycodes:   self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['CountryCodes']
-        else:                     self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['Country']
+        if self.__countrycodes:
+            self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['CountryCodes']
+            self.__USname         = 'USA'
+        else:
+            self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['Country']
+            self.__USname         = 'United States of America'
 
 
-
+        
         if self.__datasource in self.__datasourceinfo.keys():
             self.ReadData()
         else:
@@ -180,6 +185,8 @@ class COVID19_measures(object):
             # store CSV directly as data
             self.__data    = readdata.copy(deep = True)
             self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
+            if self.__resolve_US_states:
+                self.__data[self.__countrycolumn] = np.where(self.__data[self.__countrycolumn] == self.__USname, 'US - ' + self.__data['State'], self.__data[self.__countrycolumn])
     
         elif self.__datasource == 'OXFORD':
             # construct list of measures from DB column names

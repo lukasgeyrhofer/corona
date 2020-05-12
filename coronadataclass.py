@@ -37,16 +37,21 @@ class CoronaData(object):
     
     def __init__(self,**kwargs):
 
-        self.BASE_URL  = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/'
-        self.CONFIRMED = 'time_series_covid19_confirmed_global.csv'
-        self.DEATH     = 'time_series_covid19_deaths_global.csv'
-        self.RECOVERED = 'time_series_covid19_recovered_global.csv'
+        self.BASE_URL     = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/'
+        self.CONFIRMED    = 'time_series_covid19_confirmed_global.csv'
+        self.DEATH        = 'time_series_covid19_deaths_global.csv'
+        self.RECOVERED    = 'time_series_covid19_recovered_global.csv'
+
+        self.CONFIRMED_US = 'time_series_covid19_confirmed_US.csv'
+        self.DEATHS_US    = 'time_series_covid19_deaths_US.csv'
+
 
         self.__data                = {}
         self.__maxtrajectorylength = 0
         
         self.__smooth_windowsize = kwargs.get('SmoothWindowSize',None)
         self.__smooth_stddev     = kwargs.get('SmoothStdDev',None)
+        self.__resolve_US_states = kwargs.get('resolve_US_states', False)
         
         self.__output_dateformat = kwargs.get('DateFormat','%d/%m/%Y')
         self.__input_dateformat  = '%m/%d/%y'
@@ -62,7 +67,7 @@ class CoronaData(object):
 
     def LoadData(self):
         
-        if not os.path.exists(self.CONFIRMED) or not os.path.exists(self.DEATH) or not os.path.exists(self.RECOVERED):
+        if not os.path.exists(self.CONFIRMED) or not os.path.exists(self.DEATH) or not os.path.exists(self.RECOVERED) or (self.__resolve_US_states and not os.path.exists(self.CONFIRMED_US)) or (self.__resolve_US_states and not os.path.exists(self.DEATHS_US)):
             self.DownloadData()
         
         self.__data_confirmed = pd.read_csv(self.CONFIRMED)
@@ -80,7 +85,27 @@ class CoronaData(object):
             
             self.AddCountryData(country, tmp_dates, tmp_confirmed, tmp_deaths, tmp_recovered)
 
-
+        if self.__resolve_US_states:
+            
+            self.__data_confirmed_us = pd.read_csv(self.CONFIRMED_US, index_col = 0)
+            self.__data_deaths_us    = pd.read_csv(self.DEATHS_US, index_col = 0)
+            
+            statelist = list(self.__data_confirmed_us['Province_State'].unique())
+            
+            for state in statelist:
+                tmp_dates_us     = self.ConvertDates(self.__data_confirmed_us.columns[11:], inputformat = self.__input_dateformat)
+                tmp_confirmed_us = np.array(((self.__data_confirmed_us[self.__data_confirmed_us['Province_State'] == state].groupby('Province_State').sum()).T)[5:],dtype = np.int).flatten()
+                tmp_deaths_us    = np.array(((self.__data_confirmed_us[self.__data_confirmed_us['Province_State'] == state].groupby('Province_State').sum()).T)[5:],dtype = np.int).flatten()
+                tmp_recovered_us = np.zeros_like(tmp_confirmed_us)
+                
+                self.AddCountryData('US {}'.format(state), tmp_dates, tmp_confirmed_us, tmp_deaths_us, tmp_recovered_us)
+                self.countrylist.append('US {}'.format(state))
+            
+            del self.__data['US']
+            self.__countrylist.remove('US')
+            self.__countrylist.sort()
+            
+            
 
     def AddCountryData(self,countryname, dates, confirmed, deaths, recovered):
         self.__data[countryname] = pd.DataFrame({ 'Date': dates, 'Confirmed': confirmed, 'Deaths': deaths, 'Recovered': recovered})
@@ -98,6 +123,15 @@ class CoronaData(object):
         data_confirmed.to_csv(self.CONFIRMED)
         data_deaths.to_csv(self.DEATH)
         data_recovered.to_csv(self.RECOVERED)
+
+        if self.__resolve_US_states:
+            data_confirmed_us = pd.read_csv(self.BASE_URL + self.CONFIRMED_US)
+            data_deaths_us    = pd.read_csv(self.BASE_URL + self.DEATHS_US)
+            
+            data_confirmed_us.to_csv(self.CONFIRMED_US)
+            data_deaths_us.to_csv(self.DEATHS_US)
+        
+        
     
 
     
@@ -187,9 +221,6 @@ class CoronaData(object):
 
 
 
-
-        
-
     def __getattr__(self,key):
         if key.lower() == 'countrylist':
             return self.__countrylist
@@ -197,10 +228,12 @@ class CoronaData(object):
             return self.CountryData(country = key)
         else:
             raise KeyError
+
         
     
     def __len__(self):
         return self.__maxtrajectorylength
+
     
     
     def __iter__(self):
