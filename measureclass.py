@@ -303,11 +303,11 @@ class COVID19_measures(object):
         if only_pulse:
             for implementtime in implementlist:
                 measuredays = (implementtime - starttime).days
-                if measuredays+shiftdays < len(vec):
+                if 0 <= measuredays+shiftdays < len(vec):
                     vec[measuredays+shiftdays] = 1
         else:
             measuredays = (implementlist[0] - starttime).days
-            if measuredays + shiftdays < len(vec):
+            if 0 <= measuredays + shiftdays < len(vec):
                 vec[measuredays+shiftdays:] = 1
             
         if not maxlen is None:
