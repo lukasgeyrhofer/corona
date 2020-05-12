@@ -322,15 +322,27 @@ class CrossValidation(object):
     
 
     
-    def GetMeasureEffects(self, drop_zeros = False, rescale = True, include_countries = False):
+    def FinalMeasureEffects(self, drop_zeros = False, rescale = True, include_countries = False, additional_columns = []):
         if not self.finalCV is None:
             finalCVrelative                = self.finalCV.copy(deep = True).drop(columns = 'Test Countries', axis = 0).fillna(0)
             if rescale: finalCVrelative    = finalCVrelative.divide(self.finalCV['Intercept'],axis = 0)
             finalCVrelative                = finalCVrelative.quantile([.5,.025,.975]).T
-            finalCVrelative.columns        = ['median', 'low', 'high']            
+            finalCVrelative.columns        = ['median', 'low', 'high']
             if drop_zeros: finalCVrelative = finalCVrelative[(finalCVrelative['median'] != 0) | (finalCVrelative['low'] != 0) | (finalCVrelative['high'] != 0)]
+            
+            if len(additional_columns) > 0:
+                try:
+                    finalCVadditional             = self.finalCV.copy(deep = True).drop(columns = 'Test Countries', axis = 0).fillna(0)
+                    if rescale: finalCVadditional = finalCVadditional.divide(self.finalCV['Intercept'],axis = 0)
+                    finalCVadditional             = finalCVadditional.apply(additional_columns).T
+                    finalCVadditional.columns     = additional_columns
+                    
+                    finalCVrelative        = finalCVrelative.merge(finalCVadditional, left_index = True, right_index = True, how = 'left')
+                except:
+                    pass
+            
             fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate, measure_level = 2).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
-
+            
             if include_countries:
                 countryDF                  = pd.DataFrame({'Measure_L2':[country[13:].split(']')[0] for country in finalCVrelative.index if country[:3] == 'C(C']})
                 countryDF['Measure_L1']    = 'Country Effects'
@@ -505,7 +517,7 @@ class CrossValidation(object):
         fig.tight_layout()
         fig.savefig(filename)
     
-
+    
 
     def PlotMeasureListValues(self, filename = 'measurelist_values.pdf'):
         def significanceColor(beta):
@@ -598,7 +610,7 @@ class CrossValidation(object):
                 ax.annotate(textwrap.shorten(str(values[i]), width = textbreak), [1e-2*(minplot - (count_labels - i) * labelsize), ypos - .1])
 
         # setup
-        measure_effects = self.GetMeasureEffects(drop_zeros = drop_zeros, include_countries = include_countries, rescale = rescale)
+        measure_effects = self.FinalMeasureEffects(drop_zeros = drop_zeros, include_countries = include_countries, rescale = rescale)
         
         # actual plotting including vertical lines
         fig,ax = plt.subplots(figsize = figsize)
