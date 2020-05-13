@@ -34,6 +34,9 @@ class CrossValidation(object):
         self.__observable_name          = kwargs.get('ObservableName','Confirmed')
         self.__maxlen                   = kwargs.get('MaxObservableLength',None)
         self.__finaldate                = kwargs.get('FinalDate',None)
+        self.__finaldatefile            = kwargs.get('FinalDateFile',None)
+        self.__finaldatefrommeasureDB   = kwargs.get('FinalDateFromDB',False)
+        self.__extendfinaldateshiftdays = kwargs.get('FinalDateExtendWithShiftdays',False)
         self.colornames                 = kwargs.get('ColorNames',None)
         
         
@@ -69,8 +72,14 @@ class CrossValidation(object):
         #self.colornames = ['#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b'] # Amelie's color scheme
         if self.colornames is None:
             self.colornames              = [cn.upper() for cn in matplotlib.colors.TABLEAU_COLORS.keys() if (cn.upper() != 'TAB:WHITE' and cn.upper() != 'TAB:GRAY')]
-        self.L1colors                    = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount=self.__MeasureMinCount, enddate = self.__finaldate)['Measure_L1'].unique())}
+        self.L1colors                    = {L1name:self.colornames[i % len(self.colornames)] for i,L1name in enumerate(self.measure_data.MeasureList(mincount = 1).sort_values(by = 'Measure_L1')['Measure_L1'].unique())}
         self.L1colors['Country Effects'] = '#babdb6'
+        
+        
+        if not self.__finaldatefile is None:
+            self.__FinalDateCountries = pd.read_csv(self.__finaldatefile)
+        
+        
         self.__kwargs_for_pickle         = kwargs
         
         
@@ -97,7 +106,7 @@ class CrossValidation(object):
     
     
     
-    def GetObservable(self, country):
+    def GetObservable(self, country, shiftdays = None):
         if not self.__UseExternalObs:
             observable = self.jhu_data.CountryGrowthRates(country = country)[self.__observable_name].values 
             
@@ -113,17 +122,31 @@ class CrossValidation(object):
             startdate             = (datetime.datetime.strptime(self.__ExternalObservables[c_index]['startdate'].values[0],'%Y-%m-%d') + datetime.timedelta(days = 1)).strftime('%d/%m/%Y')            
             startindex            = (datetime.datetime.strptime(startdate,'%d/%m/%Y') - datetime.datetime.strptime('22/1/2020','%d/%m/%Y')).days
         
+        startdate_dt = datetime.datetime.strptime(startdate,'%d/%m/%Y')
+        possible_end_dates = [startdate_dt + datetime.timedelta(days = len(observable) - 1)]
+        
+        shiftdays_dt = datetime.timedelta(days = 0)
+        if not shiftdays is None:
+            shiftdays_dt = datetime.timedelta(days = int(shiftdays))
+        
         if not self.__maxlen is None:
-            observable            = observable[:np.min([self.__maxlen,len(observable) + 1])]
+            possible_end_dates.append(startdate_dt + datetime.timedelta(days = self.__maxlen))
 
         if not self.__finaldate is None:
-            maxlen                = (datetime.datetime.strptime(self.__finaldate,'%d/%m/%Y') - datetime.datetime.strptime(startdate,'%d/%m/%Y')).days
-            observable            = observable[:np.min([maxlen,len(observable)+1])]
+            possible_end_dates.append(datetime.datetime.strptime(self.__finaldate,'%d/%m/%Y') + shiftdays_dt)
+            
+        if not self.__finaldatefrommeasureDB is None:
+            possible_end_dates.append(datetime.datetime.strptime(self.measure_data.FinalDates(countrylist = [country])['Date'].values[0],'%d/%m/%Y') + shiftdays_dt)
         
-        enddate                   = (datetime.datetime.strptime(startdate,'%d/%m/%Y') + datetime.timedelta(days = len(observable) - 1)).strftime('%d/%m/%Y')
+        enddate = np.min(possible_end_dates).strftime('%d/%m/%Y')
         
-        return observable, startdate, enddate
-    
+        obslen = (datetime.datetime.strptime(enddate,'%d/%m/%Y') - datetime.datetime.strptime(startdate,'%d/%m/%Y')).days + 1
+
+        if obslen > 0:
+            observable = observable[:obslen]
+            return observable, startdate, enddate
+        else:
+            return None,None,None
     
     
     def GenerateRDF(self, shiftdays = 0, countrylist = None):
@@ -136,30 +159,34 @@ class CrossValidation(object):
         for country in countrylist:
             if (country in self.measure_data.countrylist) and self.HaveCountryData(country):
                 
-                observable, startdate, enddate = self.GetObservable(country)
+                extend_shiftdays = None
+                if self.__extendfinaldateshiftdays: extend_shiftdays = shiftdays
                 
-                DF_country = self.measure_data.ImplementationTable(country           = country,
-                                                                   measure_level     = 2,
-                                                                   startdate         = startdate,
-                                                                   enddate           = enddate,
-                                                                   shiftdays         = shiftdays,
-                                                                   clean_measurename = True)
-                # remove measures not in list
-                for measurename in DF_country.columns:
-                    if measurename not in measurelist.index:
-                        DF_country.drop(labels = measurename, axis = 'columns')
+                observable, startdate, enddate = self.GetObservable(country, shiftdays = extend_shiftdays)
                 
-                DF_country['Country']     = str(country)
-                DF_country['Observable']  = observable
-                
-                if self.__UseExternalIndicators:
-                    for indicator in self.ExternalIndicatorsNames.iterrows():
-                        if country in self.__ExternalIndicators.index:
-                            DF_country[indicator[0]] = self.__ExternalIndicators.loc[country,indicator[1][0]]
-                        else:
-                            DF_country[indicator[0]] = 0
+                if not observable is None:
+                    DF_country = self.measure_data.ImplementationTable( country           = country,
+                                                                        measure_level     = 2,
+                                                                        startdate         = startdate,
+                                                                        enddate           = enddate,
+                                                                        shiftdays         = shiftdays,
+                                                                        clean_measurename = True)
+                    # remove measures not in list
+                    for measurename in DF_country.columns:
+                        if measurename not in measurelist.index:
+                            DF_country.drop(labels = measurename, axis = 'columns')
+                    
+                    DF_country['Country']     = str(country)
+                    DF_country['Observable']  = observable
+                    
+                    if self.__UseExternalIndicators:
+                        for indicator in self.ExternalIndicatorsNames.iterrows():
+                            if country in self.__ExternalIndicators.index:
+                                DF_country[indicator[0]] = self.__ExternalIndicators.loc[country,indicator[1][0]]
+                            else:
+                                DF_country[indicator[0]] = 0
 
-                regressionDF = self.addDF(regressionDF,DF_country)
+                    regressionDF = self.addDF(regressionDF,DF_country)
 
         # not implemented measures should be NaN values, set them to 0
         regressionDF.fillna(0, inplace = True)
@@ -519,78 +546,78 @@ class CrossValidation(object):
     
     
 
-    def PlotMeasureListValues(self, filename = 'measurelist_values.pdf'):
-        def significanceColor(beta):
-            if beta   >  0.00: return 'red'
-            elif beta == 0.00: return 'lightgray'
-            else:              return 'black'
+    #def PlotMeasureListValues(self, filename = 'measurelist_values.pdf'):
+        #def significanceColor(beta):
+            #if beta   >  0.00: return 'red'
+            #elif beta == 0.00: return 'lightgray'
+            #else:              return 'black'
 
-        # amelies colorscheme...                 
-        colornames  = ['gray','#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
+        ## amelies colorscheme...                 
+        #colornames  = ['gray','#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
 
-        # collect measure names for labels
-        measurelist = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2, enddate = self.__finaldate)
-        countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
-        modelcount  = len(self.finalModels)
-        intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
+        ## collect measure names for labels
+        #measurelist = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2, enddate = self.__finaldate)
+        #countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
+        #modelcount  = len(self.finalModels)
+        #intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
 
-        # internal counters to determine position to plot
-        ypos = 0
-        groupcolor = 0
+        ## internal counters to determine position to plot
+        #ypos = 0
+        #groupcolor = 0
 
-        # define positions for various elements
-        label_x        = 1
-        label_x_header = .6
-        value_x        = 12
-        value_dx       = 2
-        boxalpha       = .15
+        ## define positions for various elements
+        #label_x        = 1
+        #label_x_header = .6
+        #value_x        = 12
+        #value_dx       = 2
+        #boxalpha       = .15
         
-        # start plot
-        fig,ax = plt.subplots(figsize = (14,23))
+        ## start plot
+        #fig,ax = plt.subplots(figsize = (14,23))
         
-        # country effects
-        ax.annotate('Country specific effects',[label_x_header, len(countrylist)], c = colornames[groupcolor], weight = 'bold' )
-        background = plt.Rectangle([label_x - .6, ypos - .65], value_x + (modelcount-1)*2 + .6, len(countrylist) + 1.8, fill = True, fc = colornames[groupcolor], alpha = boxalpha, zorder = 10)
-        ax.add_patch(background)
-        for country in countrylist[::-1]:
-            ax.annotate(country, [label_x, ypos], c= colornames[groupcolor])
-            for m in range(modelcount):
-                beta_val = self.finalResults[m].params['C(Country)[T.{}]'.format(country)] / intercept[m]
-                ax.annotate('{:6.0f}%'.format(beta_val*100),[value_x + m * value_dx, ypos], c = significanceColor(beta_val), ha = 'right')
-            ypos += 1
-        groupcolor += 1
-        ypos+=2 
+        ## country effects
+        #ax.annotate('Country specific effects',[label_x_header, len(countrylist)], c = colornames[groupcolor], weight = 'bold' )
+        #background = plt.Rectangle([label_x - .6, ypos - .65], value_x + (modelcount-1)*2 + .6, len(countrylist) + 1.8, fill = True, fc = colornames[groupcolor], alpha = boxalpha, zorder = 10)
+        #ax.add_patch(background)
+        #for country in countrylist[::-1]:
+            #ax.annotate(country, [label_x, ypos], c= colornames[groupcolor])
+            #for m in range(modelcount):
+                #beta_val = self.finalResults[m].params['C(Country)[T.{}]'.format(country)] / intercept[m]
+                #ax.annotate('{:6.0f}%'.format(beta_val*100),[value_x + m * value_dx, ypos], c = significanceColor(beta_val), ha = 'right')
+            #ypos += 1
+        #groupcolor += 1
+        #ypos+=2 
 
-        # measure effects
-        for l1 in L1names[::-1]:
-            ax.annotate(l1,[label_x_header, ypos + len(measure_level_dict[l1])], c = colornames[groupcolor], weight = 'bold')
-            L2names = list(measure_level_dict[l1].keys())
-            L2names.sort()
+        ## measure effects
+        #for l1 in L1names[::-1]:
+            #ax.annotate(l1,[label_x_header, ypos + len(measure_level_dict[l1])], c = colornames[groupcolor], weight = 'bold')
+            #L2names = list(measure_level_dict[l1].keys())
+            #L2names.sort()
             
-            background = plt.Rectangle([label_x - .6, ypos - .65], value_x + 2*(modelcount-1) + .6, len(measure_level_dict[l1]) + 1.8, fill = True, fc = colornames[groupcolor], alpha = boxalpha, zorder = 10)
-            ax.add_patch(background)
+            #background = plt.Rectangle([label_x - .6, ypos - .65], value_x + 2*(modelcount-1) + .6, len(measure_level_dict[l1]) + 1.8, fill = True, fc = colornames[groupcolor], alpha = boxalpha, zorder = 10)
+            #ax.add_patch(background)
             
-            for l2 in L2names[::-1]:
-                ax.annotate(l2,[label_x,ypos],c = colornames[groupcolor])
-                for m in range(modelcount):
-                    beta_val = self.finalResults[m].params[measure_level_dict[l1][l2]] / intercept[m]
-                    ax.annotate('{:6.0f}%'.format(beta_val*100),[value_x + m * value_dx, ypos], c = significanceColor(beta_val), ha = 'right')
-                ypos+=1
-            ypos+=2
-            groupcolor += 1
+            #for l2 in L2names[::-1]:
+                #ax.annotate(l2,[label_x,ypos],c = colornames[groupcolor])
+                #for m in range(modelcount):
+                    #beta_val = self.finalResults[m].params[measure_level_dict[l1][l2]] / intercept[m]
+                    #ax.annotate('{:6.0f}%'.format(beta_val*100),[value_x + m * value_dx, ypos], c = significanceColor(beta_val), ha = 'right')
+                #ypos+=1
+            #ypos+=2
+            #groupcolor += 1
 
-        # header
-        ax.annotate(r'shiftdays $s$',[label_x,ypos+1])
-        ax.annotate(r'Penality parameter $\log_{10}(\alpha)$',[label_x,ypos])
-        for m in range(modelcount):
-            ax.annotate('{}'.format(self.finalParameters[m][0]),               [value_x + m*value_dx,ypos+1],ha='right')
-            ax.annotate('{:.1f}'.format(np.log10(self.finalParameters[m][1])), [value_x + m*value_dx,ypos],ha='right')        
+        ## header
+        #ax.annotate(r'shiftdays $s$',[label_x,ypos+1])
+        #ax.annotate(r'Penality parameter $\log_{10}(\alpha)$',[label_x,ypos])
+        #for m in range(modelcount):
+            #ax.annotate('{}'.format(self.finalParameters[m][0]),               [value_x + m*value_dx,ypos+1],ha='right')
+            #ax.annotate('{:.1f}'.format(np.log10(self.finalParameters[m][1])), [value_x + m*value_dx,ypos],ha='right')        
 
-        # adjust and save
-        ax.set_xlim([0,value_x + 2 * modelcount])
-        ax.set_ylim([-1,ypos+2])
-        ax.axis('off')
-        fig.savefig(filename)
+        ## adjust and save
+        #ax.set_xlim([0,value_x + 2 * modelcount])
+        #ax.set_ylim([-1,ypos+2])
+        #ax.axis('off')
+        #fig.savefig(filename)
         
 
 

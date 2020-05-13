@@ -387,8 +387,8 @@ class COVID19_measures(object):
             return self.SortDates(datelist)[-1]
         
         if countrylist is None: countrylist = self.__countrylist
-        finaldatesDF = self.__data[[self.__countrycolumn,'Date']].groupby(by = self.__countrycolumn, as_index = True).agg({'Date':LastDate})
-        return finaldatesDF[finaldatesDF[self.__countrycolumn].isin(countrylist)]
+        finaldatesDF = self.__data[[self.__countrycolumn,'Date']].groupby(by = self.__countrycolumn, as_index = False).agg({'Date':LastDate})
+        return finaldatesDF[finaldatesDF[self.__countrycolumn].isin(countrylist)].set_index(self.__countrycolumn, drop = True)
     
     
     
