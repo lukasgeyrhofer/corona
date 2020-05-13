@@ -98,8 +98,8 @@ class CoronaData(object):
                 tmp_deaths_us    = np.array(((self.__data_confirmed_us[self.__data_confirmed_us['Province_State'] == state].groupby('Province_State').sum()).T)[5:],dtype = np.int).flatten()
                 tmp_recovered_us = np.zeros_like(tmp_confirmed_us)
                 
-                self.AddCountryData('US {}'.format(state), tmp_dates, tmp_confirmed_us, tmp_deaths_us, tmp_recovered_us)
-                self.countrylist.append('US {}'.format(state))
+                self.AddCountryData('US - {}'.format(state), tmp_dates, tmp_confirmed_us, tmp_deaths_us, tmp_recovered_us)
+                self.countrylist.append('US - {}'.format(state))
             
             del self.__data['US']
             self.__countrylist.remove('US')
