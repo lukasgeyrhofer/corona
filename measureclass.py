@@ -190,8 +190,8 @@ class COVID19_measures(object):
     
         elif self.__datasource == 'OXFORD':
             # construct list of measures from DB column names
-            # naming scheme is 'S[NUMBER]_NAME'
-            # in addition to columns 'S[NUMBER]_IsGeneral' and 'S[NUMBER]_Notes' for more info
+            # naming scheme is '[CEH][NUMBER]_NAME'
+            # in addition to columns '[CEH][NUMBER]_IsGeneral' and '[CEH][NUMBER]_Notes' for more info
             measurecolumns = []
             for mc in readdata.columns:
                 if not re.search('^[CEH]\d+\_',mc) is None:
@@ -228,8 +228,10 @@ class COVID19_measures(object):
         
         else:
             NotImplementedError
-            
-    
+
+        # update countrylist with potential changes during load
+        self.__countrylist = list(self.__data[self.__countrycolumn].unique())
+
     
     def RemoveCountry(self, country = None):
         if country in self.__countrylist:
