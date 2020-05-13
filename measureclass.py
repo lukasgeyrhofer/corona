@@ -185,6 +185,8 @@ class COVID19_measures(object):
             # store CSV directly as data
             self.__data    = readdata.copy(deep = True)
             self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
+            for i in range(self.__datasourceinfo['CSH']['MaxMeasureLevel']):
+                self.__data['Measure_L{:d}'.format(i+1)] = self.__data['Measure_L{:d}'.format(i+1)].str.strip()
             if self.__resolve_US_states:
                 self.__data[self.__countrycolumn] = np.where(self.__data[self.__countrycolumn] == self.__USname, 'US - ' + self.__data['State'], self.__data[self.__countrycolumn])
     
@@ -385,7 +387,7 @@ class COVID19_measures(object):
             return self.SortDates(datelist)[-1]
         
         if countrylist is None: countrylist = self.__countrylist
-        finaldatesDF = self.__data[[self.__countrycolumn,'Date']].groupby(by = self.__countrycolumn).agg({'Date':LastDate})
+        finaldatesDF = self.__data[[self.__countrycolumn,'Date']].groupby(by = self.__countrycolumn, as_index = True).agg({'Date':LastDate})
         return finaldatesDF[finaldatesDF[self.__countrycolumn].isin(countrylist)]
     
     
