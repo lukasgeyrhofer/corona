@@ -380,6 +380,16 @@ class COVID19_measures(object):
     
     
     
+    def FinalDates(self, countrylist = None):
+        def LastDate(datelist):
+            return self.SortDates(datelist)[-1]
+        
+        if countrylist is None: countrylist = self.__countrylist
+        finaldatesDF = self.__data[[self.__countrycolumn,'Date']].groupby(by = self.__countrycolumn).agg({'Date':LastDate})
+        return finaldatesDF[finaldatesDF[self.__countrycolumn].isin(countrylist)]
+    
+    
+    
     def __getattr__(self,key):
         if key in self.__countrylist:
             return self.CountryData(country = key)
