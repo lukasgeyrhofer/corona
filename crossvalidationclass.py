@@ -277,7 +277,9 @@ class CrossValidation(object):
             self.CVresults = self.addDF(self.CVresults,curResDF)
             
             if verbose: print('{:3d} {:.6f} {:>15s}'.format(shiftdays,alpha, datetime.datetime.now().strftime('%H:%M:%S')))
-            
+        
+        # automatically store latest CrossValidation run
+        self.CVresults.to_csv('latest_CVrun.csv')
 
 
     def SaveCVResults(self, filename = None, reset = False):
@@ -321,6 +323,9 @@ class CrossValidation(object):
                               'Test Sample Size',
                               'Training Sample Size'
                             ]
+        CVresults['RSS per datapoint Training'] = CVresults['RSS Training Sum']/CVresults['Training Sample Size']
+        CVresults['RSS per datapoint Test'] = CVresults['RSS Test Sum']/CVresults['Test Sample Size']
+        
         CVresults['alpha'] = CVresults['alpha'].astype(np.float64) # return to numbers
         CVresults.sort_values(by = ['shiftdays','alpha'], inplace = True)
         return CVresults
