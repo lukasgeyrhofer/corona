@@ -367,10 +367,10 @@ class COVID19_measures(object):
 
         if enddate is None: enddate = datetime.datetime.today().strftime(self.__dateformat)
         mheaders = ['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]
-        measurenameDF = pd.DataFrame(self.__data[mheaders + [self.__countrycolumn,'Date']]).replace(np.nan,'',regex=True)
-        measurenameDF.drop(measurenameDF[measurenameDF['Date'].astype(np.datetime64) >  np.datetime64(self.convertDate(enddate,inputformat = self.__dateformat,outputformat='%Y-%m-%d'))].index,inplace=True)
-        measurenameDF.drop('Date',axis = 'columns', inplace = True)
-        measurenameDF.drop_duplicates(inplace=True)
+        measurenameDF = pd.DataFrame(self.__data[mheaders + [self.__countrycolumn,'Date']]).replace(np.nan, '', regex = True)
+        measurenameDF.drop(measurenameDF[measurenameDF['Date'].apply(lambda x:datetime.datetime.strptime(x,self.__dateformat) > datetime.datetime.strptime(enddate,self.__dateformat))].index, inplace = True)
+        measurenameDF.drop('Date', axis = 'columns', inplace = True)
+        measurenameDF.drop_duplicates(inplace = True)
         if not countrylist is None: measurenameDF = measurenameDF[measurenameDF[self.__countrycolumn].isin(countrylist)]
         measurenameDF = measurenameDF.groupby(by = mheaders, as_index=False).count()
         measurenameDF.columns = mheaders + ['Countries with Implementation']
