@@ -79,6 +79,10 @@ class CrossValidation(object):
         if not self.__finaldatefile is None:
             self.__FinalDateCountries = pd.read_csv(self.__finaldatefile)
         
+        self.finalModels                 = []
+        self.finalResults                = []
+        self.finalCV                     = None
+        self.finalParameters             = []
         
         self.__kwargs_for_pickle         = kwargs
         
