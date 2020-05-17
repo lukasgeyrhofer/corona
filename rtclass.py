@@ -17,20 +17,24 @@ class Rtclass(object):
     based on Bettencourt & Ribeiro, PLoS ONE (2008),  https://doi.org/10.1371/journal.pone.0002185
     """
     def __init__(self,**kwargs):
-        self.jhu_data  = cdc.CoronaData(**kwargs, DateAsIndex = True)
-        self.verbose   = True
+        self.jhu_data      = cdc.CoronaData(**kwargs, DateAsIndex = True)
+        self.verbose       = kwargs.get('verbose',True)
         
-        self.R_T_MAX   = kwargs.get('RtMax',12)
-        self.r_t_range = np.linspace(0, self.R_T_MAX, self.R_T_MAX*100+1)
-        self.GAMMA     = 1. / kwargs.get('SerialInterval',7.)
-        self.sigmas    = np.linspace(1/20, 1, 20)
-        self.sigma     = kwargs.get('Sigma',.25)
-    
-        self.hdi_list  = kwargs.get('HighestDensityIntervals',[.5,.9])
-    
-        self.rt        = {}
+        self.__R_T_MAX     = kwargs.get('RtMax',12)
+        self.__R_T_SPACING = kwargs.get('RtSpacing',100)
+        self.r_t_range     = np.linspace(0, self.__R_T_MAX, self.__R_T_MAX*self.__R_T_SPACING+1)
         
-        self.__posteriors = {}
+        self.GAMMA         = 1. / kwargs.get('SerialInterval',7.)
+        
+        self.sigma         = kwargs.get('Sigma',.25)
+        self.sigmas        = np.linspace(1/20, 1, 20)
+    
+        self.hdi_list      = kwargs.get('HighestDensityIntervals',[.5,.9])
+    
+        self.__SmoothRt    = kwargs.get('SmoothRtWindowSize',None)
+        self.__SmoothRtStd = kwargs.get('SmoothRtStdDev',None)
+    
+        self.__posteriors  = {}
         self.__log_likelihoods = {}
         
         self.__kwargs_for_pickle = kwargs
@@ -75,7 +79,6 @@ class Rtclass(object):
 
         # (1) Calculate Lambda
         lam = sr[:-1].values * np.exp(self.GAMMA * (self.r_t_range[:, None] - 1))
-
         
         # (2) Calculate each day's likelihood
         likelihoods = pd.DataFrame(
@@ -84,9 +87,7 @@ class Rtclass(object):
             columns = sr.index[1:])
         
         # (3) Create the Gaussian Matrix
-        process_matrix = sps.norm(loc=self.r_t_range,
-                                scale=sigma
-                                ).pdf(self.r_t_range[:, None]) 
+        process_matrix = sps.norm(loc = self.r_t_range, scale = sigma).pdf(self.r_t_range[:, None]) 
 
         # (3a) Normalize all rows to sum to 1
         process_matrix /= process_matrix.sum(axis=0)
@@ -140,8 +141,6 @@ class Rtclass(object):
             for sigma in sigmalist:
                 self.Posteriors(country,sigma)
                 
-        
-        
         total_log_likelihoods = np.zeros_like(sigmalist)
         # Each index of this array holds the total of the log likelihoods for
         # the corresponding index of the sigmas array.
@@ -187,7 +186,10 @@ class Rtclass(object):
         for p in hdi:
             hdi_series = self.HighestDensityInterval(posterior, p = p).reset_index().drop(columns = ['Date'])
             retDF = pd.concat([retDF,hdi_series], axis = 1)
-        return retDF.drop(retDF.index[0]).set_index('Date', drop = True)
+        if (not self.__SmoothRt is None) and (not self.__SmoothRtStd is None):
+            return retDF.drop(retDF.index[0]).set_index('Date', drop = True).rolling(self.__SmoothRt, win_type = 'Gaussian', min_periods = 1, center = True).mean(std = self.__SmoothRtStd)
+        else:
+            return retDF.drop(retDF.index[0]).set_index('Date', drop = True)
         
 
 
@@ -195,9 +197,9 @@ class Rtclass(object):
         if sigma is None: sigma = self.sigma
         if country in self.countrylist:
             posterior = self.Posteriors(country = country, sigma = self.sigma)
-            return self.ProcessPosterior(posterior)
-        else:
-            return None
+            if not posterior is None:
+                return self.ProcessPosterior(posterior)
+        return None
 
 
 
