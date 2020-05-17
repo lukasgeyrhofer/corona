@@ -205,7 +205,7 @@ class Rtclass(object):
         if key == 'countrylist':
             return self.jhu_data.countrylist
         if key.replace('_',' ') in self.jhu_data.countrylist:
-            return self.CountryData(country = country)
+            return self.CountryData(country = key)
 
 
 
