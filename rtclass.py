@@ -19,23 +19,28 @@ class Rtclass(object):
     def __init__(self,**kwargs):
         self.jhu_data  = cdc.CoronaData(**kwargs, DateAsIndex = True)
         self.verbose   = True
-        self.results   = {}
         
-        self.R_T_MAX   = 12
+        self.R_T_MAX   = kwargs.get('RtMax',12)
         self.r_t_range = np.linspace(0, self.R_T_MAX, self.R_T_MAX*100+1)
-        self.GAMMA     = 1/7
-        self.sigmas    = sigmas = np.linspace(1/20, 1, 20)
-        self.sigma     = 0.25
+        self.GAMMA     = 1. / kwargs.get('SerialInterval',7.)
+        self.sigmas    = np.linspace(1/20, 1, 20)
+        self.sigma     = kwargs.get('Sigma',.25)
+    
+        self.hdi_list  = kwargs.get('HighestDensityIntervals',[.5,.9])
     
         self.rt        = {}
         
+        self.__posteriors = {}
+        self.__log_likelihoods = {}
+        
         self.__kwargs_for_pickle = kwargs
     
-    def highest_density_interval(self,pmf, p=.9, debug=False):
+    
+    
+    def HighestDensityInterval(self, pmf, p = .9, debug = False):
         # If we pass a DataFrame, just call this recursively on the columns
         if(isinstance(pmf, pd.DataFrame)):
-            return pd.DataFrame([self.highest_density_interval(pmf[col], p=p) for col in pmf],
-                                index=pmf.columns)
+            return pd.DataFrame([self.HighestDensityInterval(pmf[col], p = p) for col in pmf], index = pmf.columns)
         
         cumsum = np.cumsum(pmf.values)
         
@@ -51,28 +56,22 @@ class Rtclass(object):
         low = pmf.index[lows[best]]
         high = pmf.index[highs[best]]
         
-        return pd.Series([low, high],
-                        index=[f'Low_{p*100:.0f}',
-                                f'High_{p*100:.0f}'])
+        return pd.Series([low, high], index = [f'Low_{p*100:.0f}', f'High_{p*100:.0f}'])
 
-    def prepare_cases(self, cases, cutoff = 30):
+
+
+    def PrepareCases(self, cases, cutoff = 30):
         new_cases = cases.diff()
-
-        smoothed = new_cases.rolling(7,
-            win_type='gaussian',
-            min_periods=1,
-            center=True).mean(std=2).round()
-        
+        smoothed  = new_cases.rolling(7, win_type = 'gaussian', min_periods = 1, center = True).mean(std=2).round()
         idx_start = np.searchsorted(smoothed, cutoff)
-        
-        smoothed = smoothed.iloc[idx_start:]
-        original = new_cases.loc[smoothed.index]
+        smoothed  = smoothed.iloc[idx_start:]
+        original  = new_cases.loc[smoothed.index]
         
         return original, smoothed
     
     
     
-    def get_posteriors(self, sr, sigma = 0.25):
+    def GetPosteriors(self, sr, sigma = 0.25):
 
         # (1) Calculate Lambda
         lam = sr[:-1].values * np.exp(self.GAMMA * (self.r_t_range[:, None] - 1))
@@ -134,44 +133,22 @@ class Rtclass(object):
     def RunCV(self, countrylist = None, sigmalist = None):
         if countrylist is None: countrylist = self.countrylist
         if sigmalist is None: sigmalist = self.sigmalist
+        
         self.sigmalist = sigmalist
         
         for country in countrylist:
-            if self.verbose:print(country)
-            cases = self.jhu_data.CountryData(country)['Confirmed']
-
-            new, smoothed = self.prepare_cases(cases, cutoff=30)
-            
-            if len(smoothed) == 0:
-                new, smoothed = self.prepare_cases(cases, cutoff=10)
-            
-            
-            if len(smoothed) > 0:
-                result = {}
+            for sigma in sigmalist:
+                self.Posteriors(country,sigma)
                 
-                # Holds all posteriors with every given value of sigma
-                result['posteriors'] = []
-                
-                # Holds the log likelihood across all k for each value of sigma
-                result['log_likelihoods'] = []
-                
-                for sigma in self.sigmas:
-                    posteriors, log_likelihood = self.get_posteriors(smoothed, sigma = sigma)
-                    result['posteriors'].append(posteriors)
-                    result['log_likelihoods'].append(log_likelihood)
-                
-                # Store all results keyed off of state name
-                self.results[country] = result
-                # clear_output(wait=True)
         
         
-        total_log_likelihoods = np.zeros_like(self.sigmas)
+        total_log_likelihoods = np.zeros_like(sigmalist)
         # Each index of this array holds the total of the log likelihoods for
         # the corresponding index of the sigmas array.
 
         # Loop through each state's results and add the log likelihoods to the running total.
-        for country, result in self.results.items():
-            total_log_likelihoods += result['log_likelihoods']
+        for sigma in sigmalist:
+            total_log_likelihoods.append(np.sum([llh for country,llh in self.log_likelihoods[sigma].items()]))
 
         # Select the index with the largest log likelihood total
         self.max_likelihood_index = total_log_likelihoods.argmax()
@@ -180,27 +157,55 @@ class Rtclass(object):
         self.sigma = self.sigmas[self.max_likelihood_index]
 
 
-        
-    def ProcessResults(self, countrylist = None):
-        if countrylist is None: countrylist = list(self.results.keys())
-        
-        for country in countrylist:
-            posteriors       = self.results[country]['posteriors'][self.max_likelihood_index]
-            if len(posteriors) > 0:
-                hdis_90          = self.highest_density_interval(posteriors, p=.9)
-                hdis_50          = self.highest_density_interval(posteriors, p=.5)
-                most_likely      = posteriors.idxmax().rename('ML')
-                self.rt[country] = pd.concat([most_likely, hdis_90, hdis_50], axis=1)
-                self.rt[country]['Country'] = country
 
-        return self.rt
+    def Posteriors(self, country, sigma):
+        if sigma in self.__posteriors.keys():
+            if country in self.__posteriors[sigma].keys():
+                return self.__posteriors[sigma][country]
+        else:
+            self.__posteriors[sigma] = {}
+            self.__log_likelihoods[sigma] = {}
+            
+        cases         = self.jhu_data.CountryData(country)['Confirmed']
+        new, smoothed = self.PrepareCases(cases, cutoff = 30)
+        
+        if len(smoothed) > 0:
+            posterior, log_likelihood              = self.GetPosteriors(smoothed, sigma = sigma)
+            self.__posteriors[sigma][country]      = posterior
+            self.__log_likelihoods[sigma][country] = log_likelihood
+            
+            return self.__posteriors[sigma][country]
+        else:
+            return None
 
+    
+    
+    def ProcessPosterior(self, posterior, hdi = None):
+        if hdi is None: hdi = self.hdi_list
+        retDF = pd.DataFrame({'Date':posterior.idxmax().index, 'Rt':posterior.idxmax().values})
+        retDF['Date'] = pd.to_datetime(retDF.Date,format = '%d/%m/%Y')
+        for p in hdi:
+            hdi_series = self.HighestDensityInterval(posterior, p = p).reset_index().drop(columns = ['Date'])
+            retDF = pd.concat([retDF,hdi_series], axis = 1)
+        return retDF.drop(retDF.index[0]).set_index('Date', drop = True)
+        
+
+
+    def CountryData(self, country = None, sigma = None):
+        if sigma is None: sigma = self.sigma
+        if country in self.countrylist:
+            posterior = self.Posteriors(country = country, sigma = self.sigma)
+            return self.ProcessPosterior(posterior)
+        else:
+            return None
 
 
 
     def __getattr__(self,key):
         if key == 'countrylist':
             return self.jhu_data.countrylist
+        if key.replace('_',' ') in self.jhu_data.countrylist:
+            return self.CountryData(country = country)
 
 
 
@@ -212,6 +217,8 @@ class Rtclass(object):
                 'mlhi':    self.max_likelihood_index
                 }
     
+    
+    
     def __setstate__(self,state):
         self.__init__(**state['kwargs'])
         self.sigmas               = state['sigmas']
@@ -219,4 +226,9 @@ class Rtclass(object):
         self.rt                   = state['rt']
         self.max_likelihood_index = state['mlhi']
 
+
+
+    def __iter__(self):
+        for country in self.countrylist:
+            yield country, self.CountryData(country = country)
 
