@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d
 import coronadataclass as cdc
 
 
-class Rtclass(object):
+class RtComputation(object):
     """
     Compute R(t) from JHU data
     code copied and modified from Kevin Systrom, github.com/k-sys/covid-19/ 
@@ -18,7 +18,11 @@ class Rtclass(object):
     """
     def __init__(self,**kwargs):
         self.jhu_data      = cdc.CoronaData(**kwargs, DateAsIndex = True)
-        self.verbose       = kwargs.get('verbose',True)
+        self.verbose       = kwargs.get('verbose', False)
+        
+        self.__skip_empty    = kwargs.get('SkipEmpty',True)
+        self.__remove_negative_case_count = kwargs.get('RemoveNegativeCaseCount',True)
+        self.__drop_nan      = kwargs.get('DropNaN',True)
         
         self.__R_T_MAX     = kwargs.get('RtMax',12)
         self.__R_T_SPACING = kwargs.get('RtSpacing',100)
@@ -41,24 +45,21 @@ class Rtclass(object):
     
     
     
-    def HighestDensityInterval(self, pmf, p = .9, debug = False):
+    def HighestDensityInterval(self, pmf, p = .9, debug = None):
         # If we pass a DataFrame, just call this recursively on the columns
         if(isinstance(pmf, pd.DataFrame)):
-            return pd.DataFrame([self.HighestDensityInterval(pmf[col], p = p) for col in pmf], index = pmf.columns)
+            return pd.DataFrame([self.HighestDensityInterval(pmf[col], p = p, debug = debug) for col in pmf], index = pmf.columns)
         
-        cumsum = np.cumsum(pmf.values)
+        cumsum     = np.cumsum(pmf.values)
         
-        # N x N matrix of total probability mass for each low, high
-        total_p = cumsum - cumsum[:, None]
+        if np.any(np.isnan(pmf.values)) and self.verbose:
+            print(debug)
         
-        # Return all indices with total_p > p
-        lows, highs = (total_p > p).nonzero()
-        
-        # Find the smallest range (highest density)
-        best = (highs - lows).argmin()
-        
-        low = pmf.index[lows[best]]
-        high = pmf.index[highs[best]]
+        low_index  = np.argmin(cumsum <= (1-p)/2)
+        high_index = np.argmax(cumsum >= (1+p)/2)
+                
+        low        = pmf.index[low_index]
+        high       = pmf.index[high_index]
         
         return pd.Series([low, high], index = [f'Low_{p*100:.0f}', f'High_{p*100:.0f}'])
 
@@ -66,6 +67,8 @@ class Rtclass(object):
 
     def PrepareCases(self, cases, cutoff = 30):
         new_cases = cases.diff()
+        if self.__remove_negative_case_count:
+            new_cases[new_cases < 0] = 0
         smoothed  = new_cases.rolling(7, win_type = 'gaussian', min_periods = 1, center = True).mean(std=2).round()
         idx_start = np.searchsorted(smoothed, cutoff)
         smoothed  = smoothed.iloc[idx_start:]
@@ -157,7 +160,8 @@ class Rtclass(object):
 
 
 
-    def Posteriors(self, country, sigma):
+    def Posteriors(self, country, sigma = None):
+        if sigma is None: sigma = self.sigma
         if sigma in self.__posteriors.keys():
             if country in self.__posteriors[sigma].keys():
                 return self.__posteriors[sigma][country]
@@ -173,18 +177,21 @@ class Rtclass(object):
             self.__posteriors[sigma][country]      = posterior
             self.__log_likelihoods[sigma][country] = log_likelihood
             
+            if self.__drop_nan:
+                self.__posteriors[sigma][country].dropna(axis = 1, inplace = True)
+            
             return self.__posteriors[sigma][country]
         else:
             return None
 
     
     
-    def ProcessPosterior(self, posterior, hdi = None):
+    def ProcessPosterior(self, posterior, hdi = None, debug = None):
         if hdi is None: hdi = self.hdi_list
         retDF = pd.DataFrame({'Date':posterior.idxmax().index, 'Rt':posterior.idxmax().values})
         retDF['Date'] = pd.to_datetime(retDF.Date,format = '%d/%m/%Y')
         for p in hdi:
-            hdi_series = self.HighestDensityInterval(posterior, p = p).reset_index().drop(columns = ['Date'])
+            hdi_series = self.HighestDensityInterval(posterior, p = p, debug = debug).reset_index().drop(columns = ['Date'])
             retDF = pd.concat([retDF,hdi_series], axis = 1)
         if (not self.__SmoothRt is None) and (not self.__SmoothRtStd is None):
             return retDF.drop(retDF.index[0]).set_index('Date', drop = True).rolling(self.__SmoothRt, win_type = 'Gaussian', min_periods = 1, center = True).mean(std = self.__SmoothRtStd)
@@ -193,12 +200,16 @@ class Rtclass(object):
         
 
 
-    def CountryData(self, country = None, sigma = None):
+    def CountryData(self, country = None, sigma = None, hdi = None):
         if sigma is None: sigma = self.sigma
+        if hdi   is None: hdi   = self.hdi_list
+        
         if country in self.countrylist:
             posterior = self.Posteriors(country = country, sigma = self.sigma)
             if not posterior is None:
-                return self.ProcessPosterior(posterior)
+                return self.ProcessPosterior(posterior, hdi = hdi, debug = country)
+        
+        # something above failed
         return None
 
 
@@ -232,5 +243,7 @@ class Rtclass(object):
 
     def __iter__(self):
         for country in self.countrylist:
-            yield country, self.CountryData(country = country)
-
+            cd = self.CountryData(country = country)
+            if (self.__skip_empty and not cd is None) or (not self.__skip_empty):
+                yield country, cd
+                
