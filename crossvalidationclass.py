@@ -30,6 +30,8 @@ class CrossValidation(object):
         self.__verbose                  = kwargs.get('verbose', True)
         self.__cvres_filename           = kwargs.get('CVResultsFilename',None)
         self.__external_observable_file = kwargs.get('ExternalObservableFile',None)
+        self.__external_observable_info = {'Country':'country','Date':'startdate','Observable':'Median(R)','dateformat':'%Y-%m-%d','date_offset':1,'readcsv':{'sep':','}}
+        self.__external_observable_info.update(kwargs.get('ExternalObservableInfo',{}))
         self.__external_indicators_file = kwargs.get('ExternalIndicatorsFile',None)
         self.__observable_name          = kwargs.get('ObservableName','Confirmed')
         self.__maxlen                   = kwargs.get('MaxObservableLength',None)
@@ -53,7 +55,8 @@ class CrossValidation(object):
         self.__UseExternalObs            = False
         if not self.__external_observable_file is None:
             self.__UseExternalObs        = True
-            self.__ExternalObservables   = pd.read_csv(self.__external_observable_file)
+            self.__ExternalObservables   = pd.read_csv(self.__external_observable_file,**self.__external_observable_info['readcsv'])
+
         
         self.__UseExternalIndicators     = False
         if not self.__external_indicators_file is None:
@@ -101,7 +104,7 @@ class CrossValidation(object):
 
     def HaveCountryData(self, country = None):
         if self.__UseExternalObs:
-            if country in self.__ExternalObservables['country'].unique():
+            if country in self.__ExternalObservables[self.__external_observable_info['Country']].unique():
                 return True
         else:
             if country in self.jhu_data.countrylist:
@@ -121,9 +124,9 @@ class CrossValidation(object):
 
         else:
             # import from Nils' files
-            c_index               = np.array(self.__ExternalObservables['country'] == country)
-            observable            = self.__ExternalObservables[c_index]['Median(R)'].values[1:] # first entry is usually 0
-            startdate             = (datetime.datetime.strptime(self.__ExternalObservables[c_index]['startdate'].values[0],'%Y-%m-%d') + datetime.timedelta(days = 1)).strftime('%d/%m/%Y')            
+            c_index               = np.array(self.__ExternalObservables[self.__external_observable_info['Country']] == country)
+            observable            = self.__ExternalObservables[c_index][self.__external_observable_info['Observable']].values[1:] # first entry is usually 0
+            startdate             = (datetime.datetime.strptime(self.__ExternalObservables[c_index][self.__external_observable_info['Date']].values[0],self.__external_observable_info['dateformat']) + datetime.timedelta(days = self.__external_observable_info['date_offset'])).strftime('%d/%m/%Y')
             startindex            = (datetime.datetime.strptime(startdate,'%d/%m/%Y') - datetime.datetime.strptime('22/1/2020','%d/%m/%Y')).days
         
         startdate_dt = datetime.datetime.strptime(startdate,'%d/%m/%Y')
