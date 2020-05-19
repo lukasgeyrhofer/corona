@@ -156,6 +156,7 @@ class CrossValidation(object):
             return None,None,None
     
     
+    
     def GenerateRDF(self, shiftdays = 0, countrylist = None):
         if countrylist is None:
             countrylist = self.measure_data.countrylist
@@ -259,10 +260,12 @@ class CrossValidation(object):
             result_dict['Training Sample Size']  = len(self.RegressionDF(shiftdays)) - result_dict['Test Sample Size']
             result_dict['Loglike Training']      = trainmodel.loglike(trainresults.params)
             result_dict['Loglike Test']          = testmodel.loglike(np.array(test_params))
-            result_dict['R2 Training']           = 1 - np.sum((obs_train - pred_train)**2)/np.sum((obs_train - np.mean(obs_train))**2)
-            result_dict['R2 Test']               = 1 - np.sum((obs_test - pred_test)**2)/np.sum((obs_test - np.mean(obs_test))**2)
             result_dict['RSS Training']          = np.sum((obs_train - pred_train)**2)
             result_dict['RSS Test']              = np.sum((obs_test - pred_test)**2)
+            result_dict['NVar Training']         = np.sum((obs_train - np.mean(obs_train))**2)
+            result_dict['NVar Test']             = np.sum((obs_test - np.mean(obs_test))**2)
+            result_dict['R2 Training']           = 1 - result_dict['RSS Training']/result_dict['NVar Training']
+            result_dict['R2 Test']               = 1 - result_dict['RSS Test']/result_dict['NVar Test']
 
             result_dict.update({k:v for k,v in trainresults.params.items()})
             
@@ -317,6 +320,8 @@ class CrossValidation(object):
               'R2 Training': ['mean','std'],
               'RSS Training' : ['sum'],
               'RSS Test': ['sum'],
+              'NVar Training':['sum'],
+              'NVar Test':['sum'],
               'Test Sample Size':['sum'],
               'Training Sample Size':['sum']
             })
@@ -327,13 +332,19 @@ class CrossValidation(object):
                               'R2 Training','R2 Training Std',
                               'RSS Training Sum',
                               'RSS Test Sum',
+                              'NVar Training Sum',
+                              'NVar Test Sum',
                               'Test Sample Size',
                               'Training Sample Size'
                             ]
         CVresults['RSS per datapoint Training'] = CVresults['RSS Training Sum']/CVresults['Training Sample Size']
-        CVresults['RSS per datapoint Test'] = CVresults['RSS Test Sum']/CVresults['Test Sample Size']
+        CVresults['RSS per datapoint Test']     = CVresults['RSS Test Sum']/CVresults['Test Sample Size']
         
-        CVresults['alpha'] = CVresults['alpha'].astype(np.float64) # return to numbers
+        CVresults['R2 Trainng Sum']             = 1 - CVresults['RSS Training Sum']/CVresults['NVar Training Sum']
+        CVresults['R2 Test Sum']                = 1 - CVresults['RSS Test Sum']/CVresults['NVar Test Sum']
+        
+        CVresults['alpha']                      = CVresults['alpha'].astype(np.float64) # return to numbers
+        
         CVresults.sort_values(by = ['shiftdays','alpha'], inplace = True)
         return CVresults
 
@@ -443,8 +454,8 @@ class CrossValidation(object):
             if shiftdays in shiftdayrestriction:
                 s_index = (processedCV['shiftdays'] == shiftdays).values
                 alphalist = processedCV[s_index]['alpha']
-                ax[0].plot(alphalist, processedCV[s_index]['RSS Test Sum']/processedCV[s_index]['Test Sample Size'],         label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
-                ax[1].plot(alphalist, processedCV[s_index]['RSS Training Sum']/processedCV[s_index]['Training Sample Size'], label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+                ax[0].plot(alphalist, processedCV[s_index]['R2 Test Sum'],     label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+                ax[1].plot(alphalist, processedCV[s_index]['R2 Training Sum'], label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
         
         for i in range(2):
             ax[i].legend()
@@ -453,8 +464,8 @@ class CrossValidation(object):
             ax[i].grid()
         ax[0].set_ylim(ylim)
         
-        ax[0].set_ylabel('RSS/datapoint Test')
-        ax[1].set_ylabel('RSS/datapoint Training')
+        ax[0].set_ylabel(r'$R^2$ Test')
+        ax[1].set_ylabel(r'$R^2$ Training')
         
         fig.tight_layout()
         fig.savefig(filename)
