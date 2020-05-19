@@ -340,7 +340,7 @@ class CrossValidation(object):
         CVresults['RSS per datapoint Training'] = CVresults['RSS Training Sum']/CVresults['Training Sample Size']
         CVresults['RSS per datapoint Test']     = CVresults['RSS Test Sum']/CVresults['Test Sample Size']
         
-        CVresults['R2 Trainng Sum']             = 1 - CVresults['RSS Training Sum']/CVresults['NVar Training Sum']
+        CVresults['R2 Training Sum']             = 1 - CVresults['RSS Training Sum']/CVresults['NVar Training Sum']
         CVresults['R2 Test Sum']                = 1 - CVresults['RSS Test Sum']/CVresults['NVar Test Sum']
         
         CVresults['alpha']                      = CVresults['alpha'].astype(np.float64) # return to numbers
