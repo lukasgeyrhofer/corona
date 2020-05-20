@@ -187,8 +187,25 @@ class COVID19_measures(object):
             self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
             for i in range(self.__datasourceinfo['CSH']['MaxMeasureLevel']):
                 self.__data['Measure_L{:d}'.format(i+1)] = self.__data['Measure_L{:d}'.format(i+1)].str.strip()
+            
+            # treat each US state as individual country
             if self.__resolve_US_states:
+                # first, rename states to 'US - STATENAME'
                 self.__data[self.__countrycolumn] = np.where(self.__data[self.__countrycolumn] == self.__USname, 'US - ' + self.__data['State'], self.__data[self.__countrycolumn])
+                
+                nationwide_id = 'US - United States of America'
+                us_states = list(self.__data[self.__data[self.__countrycolumn].str.startswith('US - ')][self.__countrycolumn].unique())
+                us_states.remove(nationwide_id)
+                
+                # copy all nationwide measures for all states
+                for us_state in us_states:
+                    for index, measure_item in self.__data[self.__data[self.__countrycolumn] == nationwide_id].iterrows():
+                        self.__data = self.__data.append(measure_item.replace({self.__countrycolumn:nationwide_id}, value = us_state), ignore_index = True)
+                
+                # remove nationwide measures
+                self.__data.drop(self.__data[self.__data[self.__countrycolumn] == nationwide_id].index, inplace = True)
+                        
+                
     
         elif self.__datasource == 'OXFORD':
             # construct list of measures from DB column names

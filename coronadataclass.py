@@ -49,14 +49,15 @@ class CoronaData(object):
         self.__data                = {}
         self.__maxtrajectorylength = 0
         
-        self.__smooth_windowsize = kwargs.get('SmoothWindowSize',None)
-        self.__smooth_stddev     = kwargs.get('SmoothStdDev',None)
+        self.__smooth_windowsize = kwargs.get('SmoothWindowSize', None)
+        self.__smooth_stddev     = kwargs.get('SmoothStdDev', None)
         self.__resolve_US_states = kwargs.get('resolve_US_states', False)
+        self.__keep_US           = kwargs.get('keep_US', False)
         
-        self.__output_dateformat = kwargs.get('DateFormat','%d/%m/%Y')
+        self.__output_dateformat = kwargs.get('DateFormat', '%d/%m/%Y')
         self.__input_dateformat  = '%m/%d/%y'
         
-        self.__date_as_index     = kwargs.get('DateAsIndex',False)
+        self.__date_as_index     = kwargs.get('DateAsIndex', False)
         
         if kwargs.get('download_data',False):
             self.DownloadData()
@@ -101,8 +102,9 @@ class CoronaData(object):
                 self.AddCountryData('US - {}'.format(state), tmp_dates, tmp_confirmed_us, tmp_deaths_us, tmp_recovered_us)
                 self.countrylist.append('US - {}'.format(state))
             
-            del self.__data['US']
-            self.__countrylist.remove('US')
+            if not self.__keep_US:
+                del self.__data['US']
+                self.__countrylist.remove('US')
             self.__countrylist.sort()
             
             
