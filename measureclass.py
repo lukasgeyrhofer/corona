@@ -181,6 +181,7 @@ class COVID19_measures(object):
             raise NotImplementedError
         self.__countrylist = list(readdata[self.__countrycolumn].unique())
         
+        
         if self.__datasource == 'CSH':
             # store CSV directly as data
             self.__data    = readdata.copy(deep = True)
@@ -204,7 +205,6 @@ class COVID19_measures(object):
                 
                 # remove nationwide measures
                 self.__data.drop(self.__data[self.__data[self.__countrycolumn] == nationwide_id].index, inplace = True)
-                        
                 
     
         elif self.__datasource == 'OXFORD':
@@ -229,11 +229,13 @@ class COVID19_measures(object):
                         else:
                             self.__data = self.__data.append(db_entry_dict, ignore_index = True)
         
+        
         elif self.__datasource == 'ACAPS':
             self.__data = readdata[[self.__countrycolumn,'DATE_IMPLEMENTED','CATEGORY','MEASURE']].copy(deep = True)
             self.__data.columns = [self.__countrycolumn,'Date', 'Measure_L1', 'Measure_L2']
             self.__data.dropna(inplace = True)
             self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
+        
         
         elif self.__datasource == 'WHOPHSM':
             self.__data = readdata[[self.__countrycolumn,'date_start','who_category']].copy(deep = True)
@@ -244,6 +246,7 @@ class COVID19_measures(object):
             self.__data.drop(self.__data[self.__data['Measure_L2'] == 'nan'].index, inplace = True)
             self.__data.drop(self.__data[self.__data['Measure_L2'] == 'unkown -- unknown'].index, inplace = True)
             self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
+        
         
         else:
             NotImplementedError

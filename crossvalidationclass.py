@@ -28,18 +28,18 @@ class CrossValidation(object):
         self.__MinCaseCount             = kwargs.get('MinCases', 30) # start trajectories with at least 30 confirmed cases
         self.__MeasureMinCount          = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
         self.__verbose                  = kwargs.get('verbose', True)
-        self.__cvres_filename           = kwargs.get('CVResultsFilename',None)
-        self.__external_observable_file = kwargs.get('ExternalObservableFile',None)
+        self.__cvres_filename           = kwargs.get('CVResultsFilename', None)
+        self.__external_observable_file = kwargs.get('ExternalObservableFile', None)
         self.__external_observable_info = {'Country':'country','Date':'startdate','Observable':'Median(R)','dateformat':'%Y-%m-%d','date_offset':1,'readcsv':{'sep':','}}
-        self.__external_observable_info.update(kwargs.get('ExternalObservableInfo',{}))
-        self.__external_indicators_file = kwargs.get('ExternalIndicatorsFile',None)
-        self.__observable_name          = kwargs.get('ObservableName','Confirmed')
-        self.__maxlen                   = kwargs.get('MaxObservableLength',None)
-        self.__finaldate                = kwargs.get('FinalDate',None)
-        self.__finaldatefile            = kwargs.get('FinalDateFile',None)
-        self.__finaldatefrommeasureDB   = kwargs.get('FinalDateFromDB',False)
-        self.__extendfinaldateshiftdays = kwargs.get('FinalDateExtendWithShiftdays',False)
-        self.colornames                 = kwargs.get('ColorNames',None)
+        self.__external_observable_info.update(kwargs.get('ExternalObservableInfo', {}))
+        self.__external_indicators_file = kwargs.get('ExternalIndicatorsFile', None)
+        self.__observable_name          = kwargs.get('ObservableName', 'Confirmed')
+        self.__maxlen                   = kwargs.get('MaxObservableLength', None)
+        self.__finaldate                = kwargs.get('FinalDate', None)
+        self.__finaldatefile            = kwargs.get('FinalDateFile', None)
+        self.__finaldatefrommeasureDB   = kwargs.get('FinalDateFromDB', False)
+        self.__extendfinaldateshiftdays = kwargs.get('FinalDateExtendWithShiftdays', False)
+        self.colornames                 = kwargs.get('ColorNames', None)
         
         
         # load data from DB files
@@ -68,7 +68,7 @@ class CrossValidation(object):
         # set up internal storage
         self.CVresults                   = None
         self.__regrDF                    = {}
-    
+        
         if not self.__cvres_filename is None:
             self.LoadCVResults(filename  = self.__cvres_filename)
     
@@ -162,7 +162,7 @@ class CrossValidation(object):
             countrylist = self.measure_data.countrylist
         
         regressionDF    = None
-        measurelist    = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2, enddate = self.__finaldate)
+        measurelist     = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2, enddate = self.__finaldate)
 
         for country in countrylist:
             if (country in self.measure_data.countrylist) and self.HaveCountryData(country):
@@ -182,7 +182,7 @@ class CrossValidation(object):
                     # remove measures not in list
                     for measurename in DF_country.columns:
                         if measurename not in measurelist.index:
-                            DF_country.drop(labels = measurename, axis = 'columns')
+                            DF_country.drop(labels = measurename, axis = 'columns', inplace = True)
                     
                     DF_country['Country']     = str(country)
                     DF_country['Observable']  = observable
@@ -406,7 +406,37 @@ class CrossValidation(object):
             return None
 
 
+
+    def EstimateMeasurePrevalence(self, shiftdays = None):
+        if shiftdays is None and len(self.__regrDF) > 0:
+            shiftdays = self.__regrDF.keys()[0]
         
+        regrDF = self.RegressionDF(shiftdays)
+        
+        dropcolumns = ['Observable']
+        if self.__UseExternalIndicators:
+            for indicator in self.ExternalIndicatorsNames.iterrows():
+                dropcolumns.append(indicator)
+            
+        measures = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2)
+
+        prevalence_allcountries = regrDF.drop(['Country'] + dropcolumns, axis = 'columns').sum()/len(regrDF)
+        prevalence_allcountries.name = 'Prevalence All Countries'
+        
+        country_implementation_time  = regrDF.drop(dropcolumns, axis = 'columns').groupby(by = 'Country').sum()
+        country_observable_length    = regrDF.drop(dropcolumns, axis = 'columns').groupby(by = 'Country').count()
+
+        prevalence_implementingcountries = country_implementation_time.sum()/country_observable_length[country_implementation_time > 0].sum()
+        prevalence_implementingcountries.name = 'Prevalence Implementing Countries'
+        
+        measures = measures.merge(prevalence_allcountries, how = 'right', right_index = True, left_index = True)
+        measures = measures.merge(prevalence_implementingcountries, how = 'right', right_index = True, left_index = True)
+        
+        measures['Countries with Implementation'] = measures['Countries with Implementation'].astype(np.int)
+        
+        return measures
+    
+    
 
     # ************************************************************************************
     # ** plotting output 
