@@ -681,7 +681,7 @@ class CrossValidation(object):
 
         # function to plot one row in DF
         def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, textbreak = 40):
-            count_labels = len(values) - 3
+            count_labels = len([label for label in values.index if label.startswith('Measure_L')]) - 3
             ax.plot(values['median'],[ypos], c = self.L1colors[values[0]], marker = 'D')
             ax.plot([values['low'],values['high']],[ypos,ypos], c = self.L1colors[values[0]], lw = 2)
             background = plt.Rectangle([1e-2 * (minplot - border - count_labels * labelsize), ypos - .4], 1e-2*(count_labels*labelsize + maxplot + border - minplot), .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
