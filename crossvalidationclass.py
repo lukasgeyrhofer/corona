@@ -408,9 +408,7 @@ class CrossValidation(object):
 
 
     def EstimateMeasurePrevalence(self, shiftdays = None):
-        if shiftdays is None and len(self.__regrDF) > 0:
-            shiftdays = self.__regrDF.keys()[0]
-        
+        if shiftdays is None: shiftdays = 0
         regrDF = self.RegressionDF(shiftdays)
         
         dropcolumns = ['Observable']
@@ -432,7 +430,7 @@ class CrossValidation(object):
         measures = measures.merge(prevalence_allcountries, how = 'right', right_index = True, left_index = True)
         measures = measures.merge(prevalence_implementingcountries, how = 'right', right_index = True, left_index = True)
         
-        measures['Countries with Implementation'] = measures['Countries with Implementation'].astype(np.int)
+        measures['Fraction of Implementating Countries'] = measures['Countries with Implementation']/len(self.RegressionDF(shiftdays)['Country'].unique())
         
         return measures
     
@@ -441,6 +439,18 @@ class CrossValidation(object):
     # ************************************************************************************
     # ** plotting output 
     # ************************************************************************************
+
+
+    def PlotPrevalenceEffects(self, filename = 'prevalence_effects.pdf', ylim = (0,1), figsize = (15,6),drop_zeros = False, rescale = True):
+        fig,axes = plt.subplots(3,1,figsize = figsize)
+        ax = axes.flatten()
+        
+        prevalence = self.EstimateMeasurePrevalence()
+        effects    = self.FinalMeasureEffects(drop_zeros = drop_zeros, rescale = rescale)
+
+        combined = prevalence.merge(effects,how = 'inner',left_index = True, right_index = True)
+        
+
 
 
     def PlotTrajectories(self, filename = 'trajectories.pdf', columns = 2):
@@ -681,7 +691,7 @@ class CrossValidation(object):
 
         # function to plot one row in DF
         def PlotRow(ax, ypos = 1, values = None, color = '#ffffff', boxalpha = .2, textbreak = 40):
-            count_labels = len([label for label in values.index if label.startswith('Measure_L')]) - 3
+            count_labels = len([label for label in values.index if label.startswith('Measure_L')])
             ax.plot(values['median'],[ypos], c = self.L1colors[values[0]], marker = 'D')
             ax.plot([values['low'],values['high']],[ypos,ypos], c = self.L1colors[values[0]], lw = 2)
             background = plt.Rectangle([1e-2 * (minplot - border - count_labels * labelsize), ypos - .4], 1e-2*(count_labels*labelsize + maxplot + border - minplot), .9, fill = True, fc = color, alpha = boxalpha, zorder = 10)
@@ -725,7 +735,7 @@ class CrossValidation(object):
                 'finalModels':     self.finalModels,
                 'finalResults':    self.finalResults,
                 'finalCV':         self.finalCV,
-                'finalParameters': self.finalParameters}
+                'finalParameters': self.finalParameters.update({'download_data': False})}
     
     def __setstate__(self,state):
         self.__init__(**state['kwargs'])
