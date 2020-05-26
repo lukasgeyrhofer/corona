@@ -441,15 +441,39 @@ class CrossValidation(object):
     # ************************************************************************************
 
 
-    def PlotPrevalenceEffects(self, filename = 'prevalence_effects.pdf', ylim = (0,1), figsize = (15,6),drop_zeros = False, rescale = True):
-        fig,axes = plt.subplots(3,1,figsize = figsize)
-        ax = axes.flatten()
-        
+    def PlotPrevalenceEffects(self, filename = 'prevalence_effects.pdf', ylim = (-.3,.1), figsize = (20,6),drop_zeros = False, rescale = True, textlen = 40):
         prevalence = self.EstimateMeasurePrevalence()
         effects    = self.FinalMeasureEffects(drop_zeros = drop_zeros, rescale = rescale)
 
-        combined = prevalence.merge(effects,how = 'inner',left_index = True, right_index = True)
-        
+        combined = prevalence.merge(effects, how = 'inner',left_on = ['Measure_L1','Measure_L2'], right_on = ['Measure_L1','Measure_L2'])
+        combined.index = prevalence.index
+
+        fig, axes = plt.subplots(1,3,figsize = figsize)
+        ax = axes.flatten()
+
+        for l1name, l1group in combined.groupby(by = 'Measure_L1'):
+            errors = (l1group[['median','high']].values - l1group[['low','median']].values).T
+
+            ax[0].errorbar(x = l1group['Prevalence All Countries'],             y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen))
+            ax[1].errorbar(x = l1group['Prevalence Implementing Countries'],    y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen))
+            ax[2].errorbar(x = l1group['Fraction of Implementating Countries'], y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen))
+            
+        for i in range(len(ax)):
+            ax[i].set_xlim([0,1])
+            ax[i].set_ylim(ylim)
+            ax[i].legend()
+            ax[i].set_ylabel('Measure Effect, relvative change in infection rates')
+
+        ax[0].set_title('Prevalence All Countries')
+        ax[1].set_title('Prevalence Implementing Countries')
+        ax[2].set_title('Fraction of Implementing Countries')
+            
+        fig.tight_layout()
+        fig.savefig(filename)
+
+
+
+
 
 
 
@@ -735,11 +759,15 @@ class CrossValidation(object):
                 'finalModels':     self.finalModels,
                 'finalResults':    self.finalResults,
                 'finalCV':         self.finalCV,
-                'finalParameters': self.finalParameters.update({'download_data': False})}
+                'finalParameters': self.finalParameters}
+    
     
     def __setstate__(self,state):
-        self.__init__(**state['kwargs'])
-        self.CVresults      = state['CVresults']
+        kwargs = state['kwargs']
+        if kwargs is None:      kwargs = {'download_data':False}
+        else:                   kwargs.update({'download_data':False})
+        self.__init__(**kwargs)
+        self.CVresults        = state['CVresults']
         self.finalModels      = state['finalModels']
         self.finalResults     = state['finalResults']
         self.finalCV          = state['finalCV']
