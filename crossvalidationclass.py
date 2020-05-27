@@ -337,10 +337,10 @@ class CrossValidation(object):
               'Training Sample Size':['sum']
             })
         CVresults.columns = [ 'shiftdays','alpha',
-                              'Loglike Test','Loglike Test Std',
-                              'Loglike Training','Loglike Training Std',
-                              'R2 Test','R2 Test Std',
-                              'R2 Training','R2 Training Std',
+                              'Loglike Test Avgd','Loglike Test Avgd Std',
+                              'Loglike Training Avgd','Loglike Training Avgd Std',
+                              'R2 Test Avgd','R2 Test Avgd Std',
+                              'R2 Training Avgd','R2 Training Avgd Std',
                               'RSS Training Sum',
                               'RSS Test Sum',
                               'NVar Training Sum',
@@ -351,8 +351,8 @@ class CrossValidation(object):
         CVresults['RSS per datapoint Training'] = CVresults['RSS Training Sum']/CVresults['Training Sample Size']
         CVresults['RSS per datapoint Test']     = CVresults['RSS Test Sum']/CVresults['Test Sample Size']
         
-        CVresults['R2 Training Sum']             = 1 - CVresults['RSS Training Sum']/CVresults['NVar Training Sum']
-        CVresults['R2 Test Sum']                = 1 - CVresults['RSS Test Sum']/CVresults['NVar Test Sum']
+        CVresults['R2 Training Weighted']       = 1 - CVresults['RSS Training Sum']/CVresults['NVar Training Sum']
+        CVresults['R2 Test Weighted']           = 1 - CVresults['RSS Test Sum']/CVresults['NVar Test Sum']
         
         CVresults['alpha']                      = CVresults['alpha'].astype(np.float64) # return to numbers
         
@@ -513,7 +513,7 @@ class CrossValidation(object):
        
     
     
-    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6)):
+    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6), averaging_type = 'Weighted'):
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
         
         fig,axes = plt.subplots(1,2,figsize = figsize, sharey = True)
@@ -529,8 +529,8 @@ class CrossValidation(object):
             if shiftdays in shiftdayrestriction:
                 s_index = (processedCV['shiftdays'] == shiftdays).values
                 alphalist = processedCV[s_index]['alpha']
-                ax[0].plot(alphalist, processedCV[s_index]['R2 Test Sum'],     label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
-                ax[1].plot(alphalist, processedCV[s_index]['R2 Training Sum'], label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+                ax[0].plot(alphalist, processedCV[s_index]['R2 Test {}'.format(averaging_type)],     label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+                ax[1].plot(alphalist, processedCV[s_index]['R2 Training {}'.format(averaging_type)], label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
         
         for i in range(2):
             ax[i].legend()
@@ -770,7 +770,8 @@ class CrossValidation(object):
                 'finalModels':     self.finalModels,
                 'finalResults':    self.finalResults,
                 'finalCV':         self.finalCV,
-                'finalParameters': self.finalParameters}
+                'finalParameters': self.finalParameters,
+                'regressionDF':    self.__regrDF}
     
     
     def __setstate__(self,state):
@@ -783,4 +784,8 @@ class CrossValidation(object):
         self.finalResults     = state['finalResults']
         self.finalCV          = state['finalCV']
         self.finalParameters  = state['finalParameters']
+        try:
+            self.__regrDF     = state['regressionDF']
+        except:
+            pass
                 
