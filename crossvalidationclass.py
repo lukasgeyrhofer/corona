@@ -25,12 +25,12 @@ import measureclass as mc
 
 class CrossValidation(object):
     def __init__(self, **kwargs):
-        self.__MinCaseCount             = kwargs.get('MinCases', 30) # start trajectories with at least 30 confirmed cases
-        self.__MeasureMinCount          = kwargs.get('MeasureMinCount',5) # at least 5 countries have implemented measure
+        self.__MinCaseCount             = kwargs.get('MinCaseCount', 30) # start trajectories with at least 30 confirmed cases
+        self.__MinMeasureCount          = kwargs.get('MinMeasureCount',5) # at least 5 countries have implemented measure
         self.__verbose                  = kwargs.get('verbose', True)
         self.__cvres_filename           = kwargs.get('CVResultsFilename', None)
         self.__external_observable_file = kwargs.get('ExternalObservableFile', None)
-        self.__external_observable_info = {'Country':'country','Date':'startdate','Observable':'Median(R)','dateformat':'%Y-%m-%d','date_offset':1,'readcsv':{'sep':','}}
+        self.__external_observable_info = {'Country':'country','Date':'startdate','Observable':'Median(R)','Cases':'Confirmed','dateformat':'%Y-%m-%d','date_offset':1,'readcsv':{'sep':','},'dropna':False}
         self.__external_observable_info.update(kwargs.get('ExternalObservableInfo', {}))
         self.__external_indicators_file = kwargs.get('ExternalIndicatorsFile', None)
         self.__observable_name          = kwargs.get('ObservableName', 'Confirmed')
@@ -56,6 +56,8 @@ class CrossValidation(object):
         if not self.__external_observable_file is None:
             self.__UseExternalObs        = True
             self.__ExternalObservables   = pd.read_csv(self.__external_observable_file,**self.__external_observable_info['readcsv'])
+            if len(self.__external_observable_info['dropna']) > 0:
+                self.__ExternalObservables.dropna(subset = [label for label in self.__external_observable_info['dropna']], axis = 'index', inplace = True)
 
         
         self.__UseExternalIndicators     = False
@@ -124,10 +126,17 @@ class CrossValidation(object):
 
         else:
             # import from Nils' files
-            c_index               = np.array(self.__ExternalObservables[self.__external_observable_info['Country']] == country)
-            observable            = self.__ExternalObservables[c_index][self.__external_observable_info['Observable']].values[1:] # first entry is usually 0
-            startdate             = (datetime.datetime.strptime(self.__ExternalObservables[c_index][self.__external_observable_info['Date']].values[0],self.__external_observable_info['dateformat']) + datetime.timedelta(days = self.__external_observable_info['date_offset'])).strftime('%d/%m/%Y')
-            startindex            = (datetime.datetime.strptime(startdate,'%d/%m/%Y') - datetime.datetime.strptime('22/1/2020','%d/%m/%Y')).days
+            
+            c_index         = np.array(self.__ExternalObservables[self.__external_observable_info['Country']] == country)
+            observable      = self.__ExternalObservables[c_index][self.__external_observable_info['Observable']].values[1:] # first entry is usually 0
+            if not self.__MinCaseCount is None:
+                startindex  = next((i for i,t in enumerate(self.__ExternalObservables[c_index][self.__external_observable_info['Cases']].fillna(0).astype(np.int64) >= 30) if t), None)
+            else:
+                startindex  = 0
+            observable      = observable[startindex:]
+            startdate       = (datetime.datetime.strptime(self.__ExternalObservables[c_index][self.__external_observable_info['Date']].values[startindex],self.__external_observable_info['dateformat']) + datetime.timedelta(days = self.__external_observable_info['date_offset'])).strftime('%d/%m/%Y')
+            
+            
         
         startdate_dt = datetime.datetime.strptime(startdate,'%d/%m/%Y')
         possible_end_dates = [startdate_dt + datetime.timedelta(days = len(observable) - 1)]
@@ -162,7 +171,7 @@ class CrossValidation(object):
             countrylist = self.measure_data.countrylist
         
         regressionDF    = None
-        measurelist     = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2, enddate = self.__finaldate)
+        measurelist     = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, measure_level = 2, enddate = self.__finaldate)
 
         for country in countrylist:
             if (country in self.measure_data.countrylist) and self.HaveCountryData(country):
@@ -196,7 +205,9 @@ class CrossValidation(object):
 
                     regressionDF = self.addDF(regressionDF,DF_country)
 
-        # not implemented measures should be NaN values, set them to 0
+        # drop where NaN in Observable is found
+        regressionDF.dropna(subset = ['Observable'], axis = 'index', inplace = True)
+        # not implemented measures should be NaN values due to merge, set them to 0
         regressionDF.fillna(0, inplace = True)
         
         return regressionDF
@@ -391,7 +402,7 @@ class CrossValidation(object):
                 except:
                     pass
             
-            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate, measure_level = 2).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
+            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate, measure_level = 2).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
             
             if include_countries:
                 countryDF                  = pd.DataFrame({'Measure_L2':[country[13:].split(']')[0] for country in finalCVrelative.index if country[:3] == 'C(C']})
@@ -416,7 +427,7 @@ class CrossValidation(object):
             for indicator in self.ExternalIndicatorsNames.iterrows():
                 dropcolumns.append(indicator)
             
-        measures = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2)
+        measures = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, measure_level = 2)
 
         prevalence_allcountries = regrDF.drop(['Country'] + dropcolumns, axis = 'columns').sum()/len(regrDF)
         prevalence_allcountries.name = 'Prevalence All Countries'
@@ -547,7 +558,7 @@ class CrossValidation(object):
         fig,axes = plt.subplots(len(shiftdaylist),1,figsize=figsize)
         ax_index = 0
         
-        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
+        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
         grouped_parameters['alpha'] = grouped_parameters['alpha'].map('{:.6e}'.format)
         grouped_parameters = grouped_parameters.groupby(by = ['shiftdays','alpha'],as_index=False)
     
@@ -563,7 +574,7 @@ class CrossValidation(object):
         low_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
         high_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
 
-        measuredict = {index:l1name for index,l1name in self.measure_data.MeasureList(mincount = self.__MeasureMinCount, enddate = self.__finaldate)['Measure_L1'].items()}
+        measuredict = {index:l1name for index,l1name in self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate)['Measure_L1'].items()}
         
         if country_effects:
             countrycolor    = '#777777'
@@ -643,7 +654,7 @@ class CrossValidation(object):
         #colornames  = ['gray','#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
 
         ## collect measure names for labels
-        #measurelist = self.measure_data.MeasureList(mincount = self.__MeasureMinCount, measure_level = 2, enddate = self.__finaldate)
+        #measurelist = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, measure_level = 2, enddate = self.__finaldate)
         #countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
         #modelcount  = len(self.finalModels)
         #intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
