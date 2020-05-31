@@ -208,11 +208,11 @@ class CrossValidation(object):
                         if measurename not in measurelist.index:
                             DF_country.drop(labels = measurename, axis = 'columns', inplace = True)
                     
-                    if self.__date_randomize.upper() == 'DISTRIBUTION':
+                    if str(self.__date_randomize).upper() == 'DISTRIBUTION':
                         colnames = list(DF_country.columns)
                         random.shuffle(colnames)
                         DF_country.columns = colnames
-                    elif self.__date_randomize.upper() == 'RANDOM':
+                    elif str(self.__date_randomize).upper() == 'RANDOM':
                         for measurename in DF_country.columns:
                             new_implementation_column            = np.zeros(len(DF_country[measurename]))
                             newstart                             = random.randint(0, len(new_implementation_column)-1)
