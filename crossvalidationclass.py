@@ -7,6 +7,7 @@ import itertools
 import datetime
 import time
 import textwrap
+import random
 
 # plotting
 import matplotlib
@@ -39,6 +40,8 @@ class CrossValidation(object):
         self.__finaldatefile            = kwargs.get('FinalDateFile', None)
         self.__finaldatefrommeasureDB   = kwargs.get('FinalDateFromDB', False)
         self.__extendfinaldateshiftdays = kwargs.get('FinalDateExtendWithShiftdays', False)
+        self.__date_randomize           = kwargs.get('DateRandomize', None) # possible options: distribution (keep same distribution of implementation dates), random (flat distribution over full range)
+        self.__remove_continent         = kwargs.get('RemoveContinent', None) # possible options: europe, asia, americas
         self.colornames                 = kwargs.get('ColorNames', None)
         
         
@@ -81,6 +84,9 @@ class CrossValidation(object):
         self.L1colors['Country Effects'] = '#babdb6'
         
         
+        self.continent_country_list = {'EUROPE': ['Albania', 'Austria', 'Belgium', 'Bosnia and Herzegovina', 'Croatia', 'Czechia', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Ireland', 'Italy', 'Kosovo', 'Liechtenstein', 'Lithuania', 'Mauritius', 'Montenegro', 'Netherlands', 'North Macedonia', 'Norway', 'Portugal', 'Romania', 'Serbia', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland', 'United Kingdom'], 'ASIA': ['China', 'India', 'Indonesia', 'Japan', 'Kazakhstan', 'Korea, South', 'Kuwait', 'Malaysia', 'New Zealand', 'Singapore', 'Syria', 'Taiwan*', 'Thailand'], 'AMERICAS': ['Brazil', 'Canada', 'Ecuador', 'El Salvador', 'Honduras', 'Mexico', 'US - Alabama', 'US - Alaska', 'US - Arizona', 'US - California', 'US - Colorado', 'US - Connecticut', 'US - Delaware', 'US - Florida', 'US - Georgia', 'US - Hawaii', 'US - Idaho', 'US - Illinois', 'US - Indiana', 'US - Iowa', 'US - Kansas', 'US - Kentucky', 'US - Louisiana', 'US - Maine', 'US - Maryland', 'US - Massachusetts', 'US - Michigan', 'US - New York', 'US - Wisconsin', 'US - Wyoming']}
+
+        
         if not self.__finaldatefile is None:
             self.__FinalDateCountries = pd.read_csv(self.__finaldatefile)
         
@@ -113,6 +119,15 @@ class CrossValidation(object):
                 return True
         return False
     
+    
+    
+    def RestrictedCountry(self, country = None):
+        if not self.__remove_continent is None:
+            if self.__remove_continent.upper() in self.continent_country_list.keys():
+                if country in self.continent_country_list[self.__remove_continent.upper()]:
+                    return True
+        return False
+
     
     
     def GetObservable(self, country, shiftdays = None):
@@ -174,7 +189,7 @@ class CrossValidation(object):
         measurelist     = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, measure_level = 2, enddate = self.__finaldate)
 
         for country in countrylist:
-            if (country in self.measure_data.countrylist) and self.HaveCountryData(country):
+            if (country in self.measure_data.countrylist) and self.HaveCountryData(country) and not self.RestrictedCountry(country):
                 
                 extend_shiftdays = None
                 if self.__extendfinaldateshiftdays: extend_shiftdays = shiftdays
@@ -192,6 +207,18 @@ class CrossValidation(object):
                     for measurename in DF_country.columns:
                         if measurename not in measurelist.index:
                             DF_country.drop(labels = measurename, axis = 'columns', inplace = True)
+                    
+                    if self.__date_randomize.upper() == 'DISTRIBUTION':
+                        colnames = list(DF_country.columns)
+                        random.shuffle(colnames)
+                        DF_country.columns = colnames
+                    elif self.__date_randomize.upper() == 'RANDOM':
+                        for measurename in DF_country.columns:
+                            new_implementation_column            = np.zeros(len(DF_country[measurename]))
+                            newstart                             = random.randint(0, len(new_implementation_column)-1)
+                            new_implementation_column[newstart:] = 1
+                            DF_country[measurename]              = new_implementation_column
+                    
                     
                     DF_country['Country']     = str(country)
                     DF_country['Observable']  = observable
