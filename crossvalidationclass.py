@@ -540,7 +540,7 @@ class CrossValidation(object):
        
     
     
-    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6), averaging_type = 'Weighted'):
+    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6), averaging_type = 'Weighted', title = ''):
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
         
         fig,axes = plt.subplots(1,2,figsize = figsize, sharey = True)
@@ -564,6 +564,8 @@ class CrossValidation(object):
             ax[i].set_xlabel(r'Penalty parameter $\alpha$')
             ax[i].set_xscale('log')
             ax[i].grid()
+            if len(title) > 0:
+                ax[i].set_title(title)
         ax[0].set_ylim(ylim)
         
         ax[0].set_ylabel(r'$R^2$ Test')
