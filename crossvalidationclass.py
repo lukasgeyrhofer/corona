@@ -31,7 +31,7 @@ class CrossValidation(object):
         self.__verbose                  = kwargs.get('verbose', True)
         self.__cvres_filename           = kwargs.get('CVResultsFilename', None)
         self.__external_observable_file = kwargs.get('ExternalObservableFile', None)
-        self.__external_observable_info = {'Country':'Country','Date':'Date','Observable':'R','Cases':'Confirmed','dateformat':'%Y-%m-%d','date_offset':0,'readcsv':{'sep':';'},'dropna':True}
+        self.__external_observable_info = {'Country':'Country','Date':'Date','Observable':'R','Cases':'Confirmed','dateformat':'%Y-%m-%d','date_offset':0,'readcsv':{'sep':';'},'dropna': 'R'}
         self.__external_observable_info.update(kwargs.get('ExternalObservableInfo', {}))
         self.__external_indicators_file = kwargs.get('ExternalIndicatorsFile', None)
         self.__observable_name          = kwargs.get('ObservableName', 'Confirmed')
