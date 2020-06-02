@@ -576,7 +576,7 @@ class CrossValidation(object):
     
     
     
-    def PlotCVAlphaSweep(self, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10),verticallines = []):
+    def PlotCVAlphaSweep(self, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
         if isinstance(shiftdays,int):
             shiftdaylist = [shiftdays]
         elif isinstance(shiftdays,(tuple,list,np.ndarray)):
@@ -587,7 +587,9 @@ class CrossValidation(object):
         fig,axes = plt.subplots(len(shiftdaylist),1,figsize=figsize)
         ax_index = 0
         
-        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate).merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
+        if rescale: cvres_processed = self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T
+        else:       cvres_processed = self.CVresults.drop(columns = ['Test Countries']).T
+        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate).merge(cvres_processed,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
         grouped_parameters['alpha'] = grouped_parameters['alpha'].map('{:.6e}'.format)
         grouped_parameters = grouped_parameters.groupby(by = ['shiftdays','alpha'],as_index=False)
     
@@ -748,7 +750,7 @@ class CrossValidation(object):
         
 
 
-    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40, include_countries = False, rescale = True):
+    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40, include_countries = False, rescale = True, entryheight = None):
         # get plotting area
         minplot      = np.min(blacklines + graylines)
         maxplot      = np.max(blacklines + graylines)
@@ -767,15 +769,21 @@ class CrossValidation(object):
         measure_effects = self.FinalMeasureEffects(drop_zeros = drop_zeros, include_countries = include_countries, rescale = rescale)
         
         # actual plotting including vertical lines
+        if not entryheight is None:
+            figsize = (figsize[0],(len(measure_effects.columns) + 3.8) * entryheight)
         fig,ax = plt.subplots(figsize = figsize)
         for j,(index,values) in enumerate(measure_effects.iterrows()):
             PlotRow(ax, ypos = -j,values = values, color = self.L1colors[values[0]], textbreak = textbreak)
         for x in blacklines:
             ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
-            ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
+            if not rescale: label = '{:.0f}%'.format(x)
+            else:           label = '{:.2f}'.format(x * 1e-2)
+            ax.annotate(label,[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
         for x in graylines:
             ax.plot([1e-2 * x,1e-2 * x],[0.6,-j-0.4], lw = 1, c = 'gray',zorder = -2)
-            ax.annotate('{:.0f}%'.format(x),[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
+            if not rescale: label = '{:.0f}%'.format(x)
+            else:           label = '{:.2f}'.format(x * 1e-2)
+            ax.annotate(label,[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
         
         # format output
         if title != '':
