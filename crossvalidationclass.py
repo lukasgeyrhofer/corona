@@ -500,7 +500,7 @@ class CrossValidation(object):
             ax[i].set_xlim([0,1])
             ax[i].set_ylim(ylim)
             ax[i].legend()
-            ax[i].set_ylabel('Measure Effect, relvative change in infection rates')
+            ax[i].set_ylabel('Measure Effect')
 
         ax[0].set_title('Prevalence All Countries')
         ax[1].set_title('Prevalence Implementing Countries')
@@ -776,13 +776,13 @@ class CrossValidation(object):
             PlotRow(ax, ypos = -j,values = values, color = self.L1colors[values[0]], textbreak = textbreak)
         for x in blacklines:
             ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
-            if not rescale: label = '{:.0f}%'.format(x)
-            else:           label = '{:.2f}'.format(x * 1e-2)
+            if rescale: label = '{:.0f}%'.format(x)
+            else:       label = '{:.2f}'.format(x * 1e-2)
             ax.annotate(label,[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
         for x in graylines:
             ax.plot([1e-2 * x,1e-2 * x],[0.6,-j-0.4], lw = 1, c = 'gray',zorder = -2)
-            if not rescale: label = '{:.0f}%'.format(x)
-            else:           label = '{:.2f}'.format(x * 1e-2)
+            if rescale: label = '{:.0f}%'.format(x)
+            else:       label = '{:.2f}'.format(x * 1e-2)
             ax.annotate(label,[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
         
         # format output
