@@ -473,6 +473,30 @@ class CrossValidation(object):
         return measures
     
     
+    
+    def FinalTrajectories(self, countrylist = None):
+        model_countrylist = list(set([countryname[13:].strip(']') for model in self.finalModels for countryname in model.exog_names if countryname[:3] == 'C(C']))
+        model_countrylist.sort()
+        
+        if countrylist is None:
+            countrylist = model_countrylist
+        
+        DF_finaltrajectories = None
+
+        for country in [c for c in countrylist if c in model_countrylist]:
+            curtraj = None
+            for i,model in enumerate(self.finalModels):
+                countrymask = np.array(model.exog[:,model.exog_names.index('C(Country)[T.{}]'.format(country))],dtype=bool)
+                if curtraj is None:
+                    curtraj = pd.DataFrame({'Observable':self.finalResults[0].model.endog[countrymask]})
+                    curtraj['Country'] = country
+                curtraj['Model ({:d},{:.2f})'.format(self.finalParameters[i][0],np.log10(self.finalParameters[i][1]))] = self.finalResults[i].predict()[countrymask]
+
+            DF_finaltrajectories = self.addDF(DF_finaltrajectories,curtraj)
+        
+        return DF_finaltrajectories
+
+
 
     # ************************************************************************************
     # ** plotting output 
@@ -515,10 +539,13 @@ class CrossValidation(object):
 
 
 
-    def PlotTrajectories(self, filename = 'trajectories.pdf', columns = 2):
-        modelcount  = len(self.finalModels)
+    def PlotTrajectories(self, filename = 'trajectories.pdf', columns = 2, ylim = (0,5)):
+        ft          = self.FinalTrajectories()
+        countrylist = list(ft['Country'].unique())
+        models      = [modelname for modelname in ft.columns if modelname[:5] == 'Model']
+        modelcount  = len(models)
+        
         if modelcount > 0:
-            countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
             ycount = len(countrylist) // columns
             if len(countrylist) % columns != 0:
                 ycount += 1
@@ -526,13 +553,12 @@ class CrossValidation(object):
             fig,axes = plt.subplots(ycount, columns, figsize = (15,6.*ycount/columns))
             ax = axes.flatten()
             for j,country in enumerate(countrylist):
-                for m,(model,results) in enumerate(zip(self.finalModels,self.finalResults)):
-                    country_mask = np.array(self.RegressionDF(self.finalParameters[m][0])['Country'] == country)
-                    if m == 0:
-                        ax[j].plot(model.endog[country_mask], lw = 5, label = 'data')
-                    ax[j].plot(results.predict()[country_mask], lw = 2, linestyle = '--', label = '({:d}, {:.2f})'.format(self.finalParameters[m][0],np.log10(self.finalParameters[m][1])))
+                countrymask = np.array(ft['Country'] == country)
+                ax[j].plot(ft[countrymask]['Observable'].values, lw = 5, label = 'data')
+                for modelname in models:
+                    ax[j].plot(ft[countrymask][modelname].values, lw = 2, linestyle = '--', label = '{}'.format(modelname[6:]))
                 ax[j].annotate(country,[5,0.42], ha = 'left', fontsize = 15)
-                ax[j].set_ylim([0,0.5])
+                ax[j].set_ylim(ylim)
                 ax[j].set_xlim([0,60])
                 ax[j].legend()
             fig.tight_layout()
@@ -656,7 +682,104 @@ class CrossValidation(object):
                     yhigh = np.array(high_measures[s_index][measure].values,dtype=np.float)
                     ax.fill_between(alphalist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
 
-                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.L1colors.items()]
+                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.L1colors.items() if key != 'Country Effects']
+                if country_effects:
+                    legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
+                
+                for alpha in verticallines:
+                    ax.vline(x,zorder = 0, lw = 2, alpha = .5, c = '#000000')
+                
+                ax.legend(handles = legendhandles )
+                ax.set_xlabel(r'Penalty Parameter $\alpha$')
+                ax.set_ylabel(r'Relative Effect Size')
+                ax.annotate('shiftdays = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
+                ax.set_ylim(ylim)
+                ax.set_xscale('log')            
+        
+        fig.tight_layout()
+        fig.savefig(filename)
+    
+    
+
+    def PlotCVShiftdaySweep(self, alphalist = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
+        if isinstance(alphalist,int):
+            alphalist = [alphalist]
+        elif alphalist is None:
+            alphalist = list(self.CVresults['alpha'].unique())
+            
+        fig,axes = plt.subplots(len(alphalist),1,figsize=figsize)
+        ax_index = 0
+        
+        if rescale: cvres_processed = self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T
+        else:       cvres_processed = self.CVresults.drop(columns = ['Test Countries']).T
+        grouped_parameters = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate).merge(cvres_processed,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
+        grouped_parameters['alpha'] = grouped_parameters['alpha'].map('{:.6e}'.format)
+        grouped_parameters = grouped_parameters.groupby(by = ['shiftdays','alpha'],as_index=False)
+    
+        median_measures = grouped_parameters.quantile(.5)
+        low_measures    = grouped_parameters.quantile(.025)
+        high_measures   = grouped_parameters.quantile(.975)
+
+        median_measures['alpha'] = median_measures['alpha'].astype(np.float64)
+        low_measures['alpha']    = low_measures['alpha'].astype(np.float64)
+        high_measures['alpha']   = high_measures['alpha'].astype(np.float64)
+
+        median_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
+        low_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
+        high_measures.sort_values(by = ['shiftdays','alpha'], inplace = True)
+
+        measuredict = {index:l1name for index,l1name in self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate)['Measure_L1'].items()}
+        
+        if country_effects:
+            countrycolor    = '#777777'
+            countrylist     = pd.DataFrame({'Country':[country for country in restrictedCV.columns if country[:3] == 'C(C']})
+
+            grouped_country = countrylist.merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
+            grouped_country['alpha'] = grouped_country['alpha'].map('{:.6e}'.format)
+            grouped_country = grouped_country.groupby(by = ['shiftdays','alpha'],as_index=False)
+
+            median_country  = grouped_country.quantile(.5)
+            low_country     = grouped_country.quantile(.025)
+            high_country    = grouped_country.quantile(.975)
+
+            median_country['alpha'] = median_country['alpha'].astype(np.float64)
+            low_country['alpha']    = low_country['alpha'].astype(np.float64)
+            high_country['alpha']   = high_country['alpha'].astype(np.float64)
+
+            median_country.sort_values(by = ['shiftdays','alpha'],inplace = True)
+            low_country.sort_values(by = ['shiftdays','alpha'],inplace = True)
+            high_country.sort_values(by = ['shiftdays','alpha'],inplace = True)
+
+
+        for alpha in alphalist:
+            if alpha in self.CVresults['alpha'].astype(float):
+                
+                if len(alphalist) == 1:
+                    ax = axes
+                else:
+                    ax = axes[ax_index]
+                    ax_index += 1
+
+                if country_effects:
+                    a_index = (median_country['alpha'] == alpha)
+                    shiftdaylist = median_country[a_index]['shiftdays'].values
+                    for country in [c for c in median_country.columns if c != 'shiftdays' and c != 'alpha']:
+                        ax.plot(shiftdaylist,median_country[country].values,c = countrycolor,lw = .5)
+                        ylow  = np.array(low_country[country].values,dtype=np.float)
+                        yhigh = np.array(high_country[country].values,dtype=np.float)
+                        ax.fill_between(shiftdaylist,y1 = ylow,y2=yhigh,color = countrycolor,alpha = .05)
+
+                a_index = (median_measures['alpha'] == alpha)
+                shiftdaylist = median_measures[a_index]['shiftdays'].values
+
+                for measure in [m for m in median_measures.columns if m != 'shiftdays' and m != 'alpha']:
+                    color = self.L1colors[measuredict[measure]]
+                    ax.plot(shiftdaylist,median_measures[s_index][measure].values, c = color, lw = 2)
+                    ylow  = np.array(low_measures[s_index][measure].values,dtype=np.float)
+                    yhigh = np.array(high_measures[s_index][measure].values,dtype=np.float)
+                    ax.fill_between(shiftdaylist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
+
+                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.L1colors.items() if key != 'Country Effects']
                 if country_effects:
                     legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
                 
