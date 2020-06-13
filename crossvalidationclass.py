@@ -85,8 +85,9 @@ class CrossValidation(object):
         
         
         self.continent_country_list = {'EUROPE': ['Albania', 'Austria', 'Belgium', 'Bosnia and Herzegovina', 'Croatia', 'Czechia', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Ireland', 'Italy', 'Kosovo', 'Liechtenstein', 'Lithuania', 'Mauritius', 'Montenegro', 'Netherlands', 'North Macedonia', 'Norway', 'Portugal', 'Romania', 'Serbia', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland', 'United Kingdom'], 'ASIA': ['China', 'India', 'Indonesia', 'Japan', 'Kazakhstan', 'Korea, South', 'Kuwait', 'Malaysia', 'New Zealand', 'Singapore', 'Syria', 'Taiwan*', 'Thailand'], 'AMERICAS': ['Brazil', 'Canada', 'Ecuador', 'El Salvador', 'Honduras', 'Mexico', 'US - Alabama', 'US - Alaska', 'US - Arizona', 'US - California', 'US - Colorado', 'US - Connecticut', 'US - Delaware', 'US - Florida', 'US - Georgia', 'US - Hawaii', 'US - Idaho', 'US - Illinois', 'US - Indiana', 'US - Iowa', 'US - Kansas', 'US - Kentucky', 'US - Louisiana', 'US - Maine', 'US - Maryland', 'US - Massachusetts', 'US - Michigan', 'US - New York', 'US - Wisconsin', 'US - Wyoming']}
-        if not self.__remove_continent in self.continent_country_list:
-            raise NotImplementedError('"{}" not valid continent'.format(self.__remove_continent))
+        if not self.__remove_continent is None:
+            if not self.__remove_continent.upper() in self.continent_country_list:
+                raise NotImplementedError('"{}" not valid continent'.format(self.__remove_continent))
 
         
         if not self.__finaldatefile is None:
