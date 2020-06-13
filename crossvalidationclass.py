@@ -893,7 +893,7 @@ class CrossValidation(object):
         
         # actual plotting including vertical lines
         if not entryheight is None:
-            figsize = (figsize[0],(len(measure_effects.columns) + 3.8) * entryheight)
+            figsize = (figsize[0],(len(measure_effects) + 3.8) * entryheight)
         fig,ax = plt.subplots(figsize = figsize)
         for j,(index,values) in enumerate(measure_effects.iterrows()):
             PlotRow(ax, ypos = -j,values = values, color = self.L1colors[values[0]], textbreak = textbreak)
