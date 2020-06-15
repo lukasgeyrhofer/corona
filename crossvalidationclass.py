@@ -38,6 +38,7 @@ class CrossValidation(object):
         self.__maxlen                   = kwargs.get('MaxObservableLength', None)
         self.__finaldate                = kwargs.get('FinalDate', None)
         self.__finaldatefile            = kwargs.get('FinalDateFile', None)
+        self.__finaldatefile_dateformat = kwargs.get('FinalDateFileDateFormat','%d/%m/%Y')
         self.__finaldatefrommeasureDB   = kwargs.get('FinalDateFromDB', False)
         self.__extendfinaldateshiftdays = kwargs.get('FinalDateExtendWithShiftdays', False)
         self.__date_randomize           = kwargs.get('DateRandomize', None) # possible options: distribution (keep same distribution of implementation dates), random (flat distribution over full range)
@@ -89,7 +90,7 @@ class CrossValidation(object):
             if not self.__remove_continent.upper() in self.continent_country_list:
                 raise NotImplementedError('"{}" not valid continent'.format(self.__remove_continent))
 
-        
+        self.__FinalDateCountries = None
         if not self.__finaldatefile is None:
             self.__FinalDateCountries = pd.read_csv(self.__finaldatefile)
         
@@ -186,6 +187,11 @@ class CrossValidation(object):
             
         if not self.__finaldatefrommeasureDB is None:
             possible_end_dates.append(datetime.datetime.strptime(self.measure_data.FinalDates(countrylist = [country])['Date'].values[0],'%d/%m/%Y') + shiftdays_dt)
+        
+        if not self.__FinalDateCountries is None:
+            finaldates_external = self.__FinalDateCountries[self.__FinalDateCountries['Country'] == country]['Date'].values
+            if len(finaldates_external) > 0:
+                possible_end_dates.append(datetime.datetime.strptime(finaldates_external[0], self.__finaldatefile_dateformat) + shiftdays_dt)
         
         enddate = np.min(possible_end_dates).strftime('%d/%m/%Y')
         
@@ -558,10 +564,6 @@ class CrossValidation(object):
 
 
 
-
-
-
-
     def PlotTrajectories(self, filename = 'trajectories.pdf', columns = 2, ylim = (0,5)):
         ft          = self.FinalTrajectories()
         countrylist = list(ft['Country'].unique())
@@ -590,6 +592,7 @@ class CrossValidation(object):
     
     
     def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6), averaging_type = 'Weighted', title = ''):
+        if not averaging_type in ['Weighted', 'Avgd']: averaging_type = 'Weighted'
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
         
         fig,axes = plt.subplots(1,2,figsize = figsize, sharey = True)
