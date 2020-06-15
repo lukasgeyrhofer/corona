@@ -131,6 +131,22 @@ class CrossValidation(object):
                     return True
         return False
 
+
+    
+    def DateVector(self, start = '1/3/2020', end = None, dateformat = '%d/%m/%Y'):
+        if end is None:
+            end = datetime.datetime.strftime(datetime.datetime.today(), dateformat)
+        if datetime.datetime.strptime(end, dateformat) < datetime.datetime.strptime(start, dateformat):
+            start, end = end, start
+            
+        dvec = []
+        curdate = datetime.datetime.strptime(start, dateformat)
+        while curdate <= datetime.datetime.strptime(end, dateformat):
+            dvec.append(curdate)
+            curdate += datetime.timedelta(days = 1)
+        
+        return dvec
+            
     
     
     def GetObservable(self, country, shiftdays = None):
@@ -146,15 +162,14 @@ class CrossValidation(object):
             # import from Nils' files
             
             c_index         = np.array(self.__ExternalObservables[self.__external_observable_info['Country']] == country)
-            observable      = self.__ExternalObservables[c_index][self.__external_observable_info['Observable']].values[1:] # first entry is usually 0
+            observable      = self.__ExternalObservables[c_index][self.__external_observable_info['Observable']].values
             if not self.__MinCaseCount is None:
                 startindex  = next((i for i,t in enumerate(self.__ExternalObservables[c_index][self.__external_observable_info['Cases']].fillna(0).astype(np.int64) >= 30) if t), None)
             else:
                 startindex  = 0
             observable      = observable[startindex:]
             startdate       = (datetime.datetime.strptime(self.__ExternalObservables[c_index][self.__external_observable_info['Date']].values[startindex],self.__external_observable_info['dateformat']) + datetime.timedelta(days = self.__external_observable_info['date_offset'])).strftime('%d/%m/%Y')
-            
-            
+                        
         
         startdate_dt = datetime.datetime.strptime(startdate,'%d/%m/%Y')
         possible_end_dates = [startdate_dt + datetime.timedelta(days = len(observable) - 1)]
@@ -178,9 +193,9 @@ class CrossValidation(object):
 
         if obslen > 0:
             observable = observable[:obslen]
-            return observable, startdate, enddate
+            return observable, self.DateVector(startdate, enddate)
         else:
-            return None,None,None
+            return None,None
     
     
     
@@ -197,13 +212,13 @@ class CrossValidation(object):
                 extend_shiftdays = None
                 if self.__extendfinaldateshiftdays: extend_shiftdays = shiftdays
                 
-                observable, startdate, enddate = self.GetObservable(country, shiftdays = extend_shiftdays)
+                observable, datevector = self.GetObservable(country, shiftdays = extend_shiftdays)
                 
                 if not observable is None:
                     DF_country = self.measure_data.ImplementationTable( country           = country,
                                                                         measure_level     = 2,
-                                                                        startdate         = startdate,
-                                                                        enddate           = enddate,
+                                                                        startdate         = datetime.datetime.strftime(datevector[0],'%d/%m/%Y'),
+                                                                        enddate           = datetime.datetime.strftime(datevector[-1],'%d/%m/%Y'),
                                                                         shiftdays         = shiftdays,
                                                                         clean_measurename = True)
                     # remove measures not in list
@@ -211,6 +226,7 @@ class CrossValidation(object):
                         if measurename not in measurelist.index:
                             DF_country.drop(labels = measurename, axis = 'columns', inplace = True)
                     
+                    # additional statistical tests to shuffle data
                     if str(self.__date_randomize).upper() == 'DISTRIBUTION':
                         colnames = list(DF_country.columns)
                         random.shuffle(colnames)
@@ -225,6 +241,7 @@ class CrossValidation(object):
                     
                     DF_country['Country']     = str(country)
                     DF_country['Observable']  = observable
+                    DF_country['Date']        = datevector
                     
                     if self.__UseExternalIndicators:
                         for indicator in self.ExternalIndicatorsNames.iterrows():
@@ -257,6 +274,7 @@ class CrossValidation(object):
         measurelist       = list(self.RegressionDF(shiftdays).columns)
         measurelist.remove('Observable')
         measurelist.remove('Country')
+        measurelist.remove('Date')
         
         formula           = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
         
@@ -277,8 +295,8 @@ class CrossValidation(object):
             testcountries = [countrylist[i] for i,s in enumerate(sample_countries) if s == xv_index]
             trainidx      = (samples != xv_index)
             testidx       = (samples == xv_index)
-            trainmodel    = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[trainidx])
-            testmodel     = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[testidx])
+            trainmodel    = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[trainidx], drop_cols = 'Date')
+            testmodel     = smf.ols(formula = formula, data = self.RegressionDF(shiftdays)[testidx], drop_cols = 'Date')
         
             trainresults  = trainmodel.fit_regularized(alpha = alpha, L1_wt = L1_wt)
 
@@ -331,6 +349,7 @@ class CrossValidation(object):
         
         # automatically store latest CrossValidation run
         self.CVresults.to_csv('latest_CVrun.csv')
+
 
 
     def SaveCVResults(self, filename = None, reset = False):
@@ -406,9 +425,11 @@ class CrossValidation(object):
             measurelist  = list(self.RegressionDF(shiftdays).columns)
             measurelist.remove('Observable')
             measurelist.remove('Country')
+            measurelist.remove('Date')
+            
             formula      = 'Observable ~ C(Country) + ' + ' + '.join(measurelist)
             
-            self.finalModels.append(smf.ols(data = self.RegressionDF(shiftdays), formula = formula))
+            self.finalModels.append(smf.ols(data = self.RegressionDF(shiftdays), formula = formula, drop_cols = 'Date'))
             self.finalResults.append(self.finalModels[i].fit_regularized(alpha = alpha, L1_wt = L1_wt))
     
 
@@ -452,7 +473,7 @@ class CrossValidation(object):
         if shiftdays is None: shiftdays = 0
         regrDF = self.RegressionDF(shiftdays)
         
-        dropcolumns = ['Observable']
+        dropcolumns = ['Observable', 'Date']
         if self.__UseExternalIndicators:
             for indicator in self.ExternalIndicatorsNames.iterrows():
                 dropcolumns.append(indicator)
@@ -489,13 +510,12 @@ class CrossValidation(object):
         for country in [c for c in countrylist if c in model_countrylist]:
             curtraj = None
             for i,model in enumerate(self.finalModels):
-                countrymask = np.array(model.exog[:,model.exog_names.index('C(Country)[T.{}]'.format(country))],dtype=bool)
+                countrymask = np.array(self.RegressionDF(self.finalParameters[i][0])['Country'] == country, dtype = np.bool)
                 if curtraj is None:
-                    curtraj = pd.DataFrame({'Observable':self.finalResults[0].model.endog[countrymask]})
-                    curtraj['Country'] = country
+                    curtraj = self.RegressionDF(self.finalParameters[i][0])[countrymask][['Country','Date','Observable']].copy(deep = True)
                 curtraj['Model ({:d},{:.2f})'.format(self.finalParameters[i][0],np.log10(self.finalParameters[i][1]))] = self.finalResults[i].predict()[countrymask]
 
-            DF_finaltrajectories = self.addDF(DF_finaltrajectories,curtraj)
+            DF_finaltrajectories = self.addDF(DF_finaltrajectories, curtraj)
         
         return DF_finaltrajectories
 
