@@ -592,7 +592,7 @@ class CrossValidation(object):
        
     
     
-    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6), averaging_type = 'Weighted', title = ''):
+    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6), averaging_type = 'Weighted', title = '', highlight_shiftdays = None, highlight_alpha = None):
         if not averaging_type in ['Weighted', 'Avgd']: averaging_type = 'Weighted'
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
         
@@ -607,10 +607,16 @@ class CrossValidation(object):
         
         for shiftdays in shiftdaylist:
             if shiftdays in shiftdayrestriction:
+                plot_parameters = {'lw':2,'alpha':.8}
+                if not highlight_shiftdays is None:
+                    plot_parameters.update({'linestyle':'--', 'alpha':.5})
+                    if highlight_shiftdays == shiftdays:
+                        plot_parameters.update({'lw':4,'c':'black','linestyle':'solid','alpha':.8})
+                        
                 s_index = (processedCV['shiftdays'] == shiftdays).values
                 alphalist = processedCV[s_index]['alpha']
-                ax[0].plot(alphalist, processedCV[s_index]['R2 Test {}'.format(averaging_type)],     label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
-                ax[1].plot(alphalist, processedCV[s_index]['R2 Training {}'.format(averaging_type)], label = 's = {}'.format(shiftdays), lw = 3, alpha = .8)
+                ax[0].plot(alphalist, processedCV[s_index]['R2 Test {}'.format(averaging_type)],     label = 's = {}'.format(shiftdays), **plot_parameters)
+                ax[1].plot(alphalist, processedCV[s_index]['R2 Training {}'.format(averaging_type)], label = 's = {}'.format(shiftdays), **plot_parameters)
         
         for i in range(2):
             ax[i].legend()
@@ -623,6 +629,13 @@ class CrossValidation(object):
         
         ax[0].set_ylabel(r'$R^2$ Test')
         ax[1].set_ylabel(r'$R^2$ Training')
+        
+        
+        if not highlight_alpha is None:
+            ax[0].vlines(highlight_alpha,ylim[0],ylim[1],color = 'black', lw = 1)
+            ax[1].vlines(highlight_alpha,ylim[0],ylim[1],color = 'black', lw = 1)
+            xlim = ax[0].get_xlim()
+            ax[0].annotate('Optimal paramters',(highlight_alpha*np.power(xlim[0]/xlim[1],.025),.96*ylim[1]+.04*ylim[0]),va='top',rotation=90)
         
         fig.tight_layout()
         fig.savefig(filename)
