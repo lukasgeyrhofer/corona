@@ -446,7 +446,6 @@ class CrossValidation(object):
             if rescale: finalCVrelative    = finalCVrelative.divide(self.finalCV['Intercept'],axis = 0)
             finalCVrelative                = finalCVrelative.quantile([.5,.025,.975]).T
             finalCVrelative.columns        = ['median', 'low', 'high']
-            if drop_zeros: finalCVrelative = finalCVrelative[(finalCVrelative['median'] != 0) | (finalCVrelative['low'] != 0) | (finalCVrelative['high'] != 0)]
             
             if len(additional_columns) > 0:
                 try:
@@ -459,7 +458,9 @@ class CrossValidation(object):
                 except:
                     pass
             
-            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate, measure_level = 2).merge(finalCVrelative, how = 'inner', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0)
+            fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate, measure_level = 2).merge(finalCVrelative, how = 'left', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0).fillna(0)
+            
+            if drop_zeros: fCV_withNames   = fCV_withNames[(fCV_withNames['median'] != 0) | (fCV_withNames['low'] != 0) | (fCV_withNames['high'] != 0)]
             
             if include_countries:
                 countryDF                  = pd.DataFrame({'Measure_L2':[country[13:].split(']')[0] for country in finalCVrelative.index if country[:3] == 'C(C']})
