@@ -12,6 +12,7 @@ import random
 # plotting
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 
 # statistics
 import statsmodels.api as sm
@@ -592,7 +593,7 @@ class CrossValidation(object):
        
     
     
-    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), figsize = (15,6), averaging_type = 'Weighted', title = '', highlight_shiftdays = None, highlight_alpha = None):
+    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), xlim = None, figsize = (15,6), averaging_type = 'Weighted', title = '', highlight_shiftdays = None, highlight_alpha = None, ytics = None, mytics = None, grid = True):
         if not averaging_type in ['Weighted', 'Avgd']: averaging_type = 'Weighted'
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
         
@@ -622,10 +623,17 @@ class CrossValidation(object):
             ax[i].legend()
             ax[i].set_xlabel(r'Penalty parameter $\alpha$')
             ax[i].set_xscale('log')
-            ax[i].grid()
+            if grid:
+                ax[i].grid()
+            ax[i].set_ylim(ylim)
             if len(title) > 0:
                 ax[i].set_title(title)
-        ax[0].set_ylim(ylim)
+            if not xlim is None:
+                ax[i].set_xlim(xlim)
+            if not ytics is None:
+                ax[i].yaxis.set_major_locator(MultipleLocator(ytics))
+            if not mytics is None:
+                ax[i].yaxis.set_minor_locator(MultipleLocator(mytics))
         
         ax[0].set_ylabel(r'$R^2$ Test')
         ax[1].set_ylabel(r'$R^2$ Training')
