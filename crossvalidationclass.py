@@ -562,7 +562,7 @@ class CrossValidation(object):
         ax[2].set_title('Fraction of Implementing Countries')
             
         fig.tight_layout()
-        fig.savefig(filename)
+        fig.savefig(filename, bbox_inches = 'tight')
 
 
 
@@ -589,7 +589,7 @@ class CrossValidation(object):
                 ax[j].set_xlim([0,60])
                 ax[j].legend()
             fig.tight_layout()
-            fig.savefig(filename)
+            fig.savefig(filename, bbox_inches = 'tight')
        
     
     
@@ -646,7 +646,7 @@ class CrossValidation(object):
             ax[0].annotate('Optimal paramters',(highlight_alpha*np.power(xlim[0]/xlim[1],.025),.96*ylim[1]+.04*ylim[0]),va='top',rotation=90)
         
         fig.tight_layout()
-        fig.savefig(filename)
+        fig.savefig(filename, bbox_inches = 'tight')
     
     
     
@@ -745,7 +745,7 @@ class CrossValidation(object):
                 ax.set_xscale('log')            
         
         fig.tight_layout()
-        fig.savefig(filename)
+        fig.savefig(filename, bbox_inches = 'tight')
     
     
 
@@ -842,7 +842,7 @@ class CrossValidation(object):
                 ax.set_xscale('log')            
         
         fig.tight_layout()
-        fig.savefig(filename)
+        fig.savefig(filename, bbox_inches = 'tight')
     
     
 
@@ -917,7 +917,7 @@ class CrossValidation(object):
         #ax.set_xlim([0,value_x + 2 * modelcount])
         #ax.set_ylim([-1,ypos+2])
         #ax.axis('off')
-        #fig.savefig(filename)
+        #fig.savefig(filename, bbox_inches = 'tight')
         
 
 
@@ -962,7 +962,7 @@ class CrossValidation(object):
         ax.set_xlim([1e-2 * (-(len(measure_effects.columns) -3 ) * labelsize - 2*border + minplot), 1e-2 * (maxplot+border)])
         ax.set_ylim([-j-2,1.8])
         ax.axis('off')
-        fig.savefig(filename)
+        fig.savefig(filename, bbox_inches = 'tight')
 
 
 
