@@ -461,8 +461,6 @@ class CrossValidation(object):
             
             fCV_withNames                  = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, enddate = self.__finaldate, measure_level = 2).merge(finalCVrelative, how = 'left', left_index = True, right_index = True).drop(columns = 'Countries with Implementation', axis = 0).fillna(0)
             
-            if drop_zeros: fCV_withNames   = fCV_withNames[(fCV_withNames['median'] != 0) | (fCV_withNames['low'] != 0) | (fCV_withNames['high'] != 0)]
-            
             if include_countries:
                 countryDF                  = pd.DataFrame({'Measure_L2':[country[13:].split(']')[0] for country in finalCVrelative.index if country[:3] == 'C(C']})
                 countryDF['Measure_L1']    = 'Country Effects'
@@ -470,6 +468,8 @@ class CrossValidation(object):
                 fCV_withCountries          = countryDF.merge(finalCVrelative, how = 'inner', left_index = True, right_index = True)
                 fCV_withNames              = self.addDF(fCV_withNames,fCV_withCountries)
             
+            
+            if drop_zeros: fCV_withNames   = fCV_withNames[(fCV_withNames['median'] != 0) | (fCV_withNames['low'] != 0) | (fCV_withNames['high'] != 0)]
             fCV_withNames.sort_values(by   = ['median','high','low'], inplace = True)
             return fCV_withNames
         else:
@@ -534,15 +534,37 @@ class CrossValidation(object):
     # ************************************************************************************
 
 
-    def PlotPrevalenceEffects(self, filename = 'prevalence_effects.pdf', ylim = (-.3,.1), figsize = (20,6),drop_zeros = False, rescale = True, textlen = 40):
+    def CheckExternalAxes(self, external_axes = None, figsize = (15,6), panelsize = (1,1), additional_subplots_params = {}):
+        if isinstance(panelsize,int):
+            required_panels = panelsize
+            figpanels = (panelsize,1)
+        elif isinstance(panelsize,(tuple,list,np.ndarray)):
+            required_panels = panelsize[0] * panelsize[1]
+            figpanels = (panelsize[0],panelsize[1])
+        else:
+            raise ValueError
+        
+        if not external_axes is None:
+            if len(external_axes) >= required_panels:
+                return None, external_axes, False
+        
+        fig, axes = plt.subplots(figpanels[0],figpanels[1],figsize = figsize, **additional_subplots_params)
+        if required_panels > 1:
+            ax = axes.flatten()
+        else:
+            ax = [axes]
+        return fig, ax, True
+    
+            
+
+    def PlotPrevalenceEffects(self, external_axes = None, filename = 'prevalence_effects.pdf', ylim = (-.3,.1), figsize = (20,6),drop_zeros = False, rescale = True, textlen = 40):
         prevalence = self.EstimateMeasurePrevalence()
         effects    = self.FinalMeasureEffects(drop_zeros = drop_zeros, rescale = rescale)
 
         combined = prevalence.merge(effects, how = 'inner',left_on = ['Measure_L1','Measure_L2'], right_on = ['Measure_L1','Measure_L2'])
         combined.index = prevalence.index
-
-        fig, axes = plt.subplots(1,3,figsize = figsize)
-        ax = axes.flatten()
+        
+        fig, ax, savefig = self.CheckExternalAxes(external_axes,figsize,(1,3))                
 
         for l1name, l1group in combined.groupby(by = 'Measure_L1'):
             errors = (l1group[['median','high']].values - l1group[['low','median']].values).T
@@ -560,13 +582,14 @@ class CrossValidation(object):
         ax[0].set_title('Prevalence All Countries')
         ax[1].set_title('Prevalence Implementing Countries')
         ax[2].set_title('Fraction of Implementing Countries')
-            
-        fig.tight_layout()
-        fig.savefig(filename, bbox_inches = 'tight')
+        
+        if savefig:
+            fig.tight_layout()
+            fig.savefig(filename, bbox_inches = 'tight')
 
 
 
-    def PlotTrajectories(self, filename = 'trajectories.pdf', columns = 2, ylim = (0,5)):
+    def PlotTrajectories(self, external_axes = None, filename = 'trajectories.pdf', columns = 2, ylim = (0,5)):
         ft          = self.FinalTrajectories()
         countrylist = list(ft['Country'].unique())
         models      = [modelname for modelname in ft.columns if modelname[:5] == 'Model']
@@ -577,8 +600,8 @@ class CrossValidation(object):
             if len(countrylist) % columns != 0:
                 ycount += 1
             
-            fig,axes = plt.subplots(ycount, columns, figsize = (15,6.*ycount/columns))
-            ax = axes.flatten()
+            fig, ax, savefig = self.CheckExternalAxes(external_axes,(15,6.*ycount/columns),(ycount,columns))
+
             for j,country in enumerate(countrylist):
                 countrymask = np.array(ft['Country'] == country)
                 ax[j].plot(ft[countrymask]['Observable'].values, lw = 5, label = 'data')
@@ -588,17 +611,18 @@ class CrossValidation(object):
                 ax[j].set_ylim(ylim)
                 ax[j].set_xlim([0,60])
                 ax[j].legend()
-            fig.tight_layout()
-            fig.savefig(filename, bbox_inches = 'tight')
+            
+            if savefig:
+                fig.tight_layout()
+                fig.savefig(filename, bbox_inches = 'tight')
        
     
     
-    def PlotCVresults(self, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), xlim = None, figsize = (15,6), averaging_type = 'Weighted', title = '', highlight_shiftdays = None, highlight_alpha = None, ytics = None, mytics = None, grid = True):
+    def PlotCVresults(self, external_axes = None, filename = 'CVresults.pdf', shiftdayrestriction = None, ylim = (0,1), xlim = None, figsize = (15,6), averaging_type = 'Weighted', title = '', highlight_shiftdays = None, highlight_alpha = None, ytics = None, mytics = None, grid = True):
         if not averaging_type in ['Weighted', 'Avgd']: averaging_type = 'Weighted'
         processedCV = self.ProcessCVresults().sort_values(by = 'alpha')
         
-        fig,axes = plt.subplots(1,2,figsize = figsize, sharey = True)
-        ax = axes.flatten()
+        fig, ax, savefig = self.CheckExternalAxes(external_axes, figsize, (1,2))
         
         shiftdaylist = np.array(processedCV['shiftdays'].unique(), dtype = np.int)
         shiftdaylist.sort()
@@ -645,20 +669,22 @@ class CrossValidation(object):
             xlim = ax[0].get_xlim()
             ax[0].annotate('Optimal paramters',(highlight_alpha*np.power(xlim[0]/xlim[1],.025),.96*ylim[1]+.04*ylim[0]),va='top',rotation=90)
         
-        fig.tight_layout()
-        fig.savefig(filename, bbox_inches = 'tight')
+        if savefig:
+            fig.tight_layout()
+            fig.savefig(filename, bbox_inches = 'tight')
     
     
     
-    def PlotCVAlphaSweep(self, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
+    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
         if isinstance(shiftdays,int):
             shiftdaylist = [shiftdays]
         elif isinstance(shiftdays,(tuple,list,np.ndarray)):
             shiftdaylist = shiftdays
         elif shiftdays is None:
             shiftdaylist = list(self.CVresults['shiftdays'].unique())
-            
-        fig,axes = plt.subplots(len(shiftdaylist),1,figsize=figsize)
+        
+        fig, ax, savefig = self.CheckExternalAxes(external_axes, figsize, len(shiftdaylist))
+
         ax_index = 0
         
         if rescale: cvres_processed = self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T
@@ -701,15 +727,9 @@ class CrossValidation(object):
             low_country.sort_values(by = ['shiftdays','alpha'],inplace = True)
             high_country.sort_values(by = ['shiftdays','alpha'],inplace = True)
 
-
+        
         for shiftdays in shiftdaylist:
             if shiftdays in self.CVresults['shiftdays']:
-                
-                if len(shiftdaylist) == 1:
-                    ax = axes
-                else:
-                    ax = axes[ax_index]
-                    ax_index += 1
 
                 if country_effects:
                     s_index = (median_country['shiftdays'] == shiftdays)
@@ -718,44 +738,48 @@ class CrossValidation(object):
                         ax.plot(alphalist,median_country[country].values,c = countrycolor,lw = .5)
                         ylow  = np.array(low_country[country].values,dtype=np.float)
                         yhigh = np.array(high_country[country].values,dtype=np.float)
-                        ax.fill_between(alphalist,y1 = ylow,y2=yhigh,color = countrycolor,alpha = .05)
+                        ax[ax_index].fill_between(alphalist,y1 = ylow,y2=yhigh,color = countrycolor,alpha = .05)
 
                 s_index = (median_measures['shiftdays'] == shiftdays)
                 alphalist = median_measures[s_index]['alpha'].values
 
                 for measure in [m for m in median_measures.columns if m != 'shiftdays' and m != 'alpha']:
                     color = self.L1colors[measuredict[measure]]
-                    ax.plot(alphalist,median_measures[s_index][measure].values, c = color, lw = 2)
+                    ax[ax_index].plot(alphalist,median_measures[s_index][measure].values, c = color, lw = 2)
                     ylow  = np.array(low_measures[s_index][measure].values,dtype=np.float)
                     yhigh = np.array(high_measures[s_index][measure].values,dtype=np.float)
-                    ax.fill_between(alphalist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
+                    ax[ax_index].fill_between(alphalist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
 
                 legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.L1colors.items() if key != 'Country Effects']
                 if country_effects:
                     legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
                 
                 for alpha in verticallines:
-                    ax.vline(x,zorder = 0, lw = 2, alpha = .5, c = '#000000')
+                    ax[ax_index].vline(x,zorder = 0, lw = 2, alpha = .5, c = '#000000')
                 
-                ax.legend(handles = legendhandles )
-                ax.set_xlabel(r'Penalty Parameter $\alpha$')
-                ax.set_ylabel(r'Relative Effect Size')
-                ax.annotate('shiftdays = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
-                ax.set_ylim(ylim)
-                ax.set_xscale('log')            
+                ax[ax_index].legend(handles = legendhandles )
+                ax[ax_index].set_xlabel(r'Penalty Parameter $\alpha$')
+                ax[ax_index].set_ylabel(r'Relative Effect Size')
+                ax[ax_index].annotate('shiftdays = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
+                ax[ax_index].set_ylim(ylim)
+                ax[ax_index].set_xscale('log')
+                
+                ax_index += 1
         
-        fig.tight_layout()
-        fig.savefig(filename, bbox_inches = 'tight')
+        if savefig:
+            fig.tight_layout()
+            fig.savefig(filename, bbox_inches = 'tight')
     
     
 
-    def PlotCVShiftdaySweep(self, alphalist = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
+    def PlotCVShiftdaySweep(self, external_axes, alphalist = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
         if isinstance(alphalist,int):
             alphalist = [alphalist]
         elif alphalist is None:
             alphalist = list(self.CVresults['alpha'].unique())
-            
-        fig,axes = plt.subplots(len(alphalist),1,figsize=figsize)
+        
+        fig, axes, savefig = self.CheckExternalAxes(external_axes, figsize, len(alphalist))
+
         ax_index = 0
         
         if rescale: cvres_processed = self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T
@@ -841,8 +865,9 @@ class CrossValidation(object):
                 ax.set_ylim(ylim)
                 ax.set_xscale('log')            
         
-        fig.tight_layout()
-        fig.savefig(filename, bbox_inches = 'tight')
+        if savefig:
+            fig.tight_layout()
+            fig.savefig(filename, bbox_inches = 'tight')
     
     
 
@@ -921,7 +946,7 @@ class CrossValidation(object):
         
 
 
-    def PlotMeasureListSorted(self, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40, include_countries = False, rescale = True, entryheight = None):
+    def PlotMeasureListSorted(self, external_axes = None, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40, include_countries = False, rescale = True, entryheight = None):
         # get plotting area
         minplot      = np.min(blacklines + graylines)
         maxplot      = np.max(blacklines + graylines)
@@ -942,27 +967,31 @@ class CrossValidation(object):
         # actual plotting including vertical lines
         if not entryheight is None:
             figsize = (figsize[0],(len(measure_effects) + 3.8) * entryheight)
-        fig,ax = plt.subplots(figsize = figsize)
+        fig, ax, savefig = self.CheckExternalAxes(external_axes, figsize, 1)
+
         for j,(index,values) in enumerate(measure_effects.iterrows()):
-            PlotRow(ax, ypos = -j,values = values, color = self.L1colors[values[0]], textbreak = textbreak)
+            PlotRow(ax[0], ypos = -j,values = values, color = self.L1colors[values[0]], textbreak = textbreak)
         for x in blacklines:
-            ax.plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
+            ax[0].plot([1e-2 * x,1e-2 * x],[0.7,-j-0.5], lw = 2, c = 'black',zorder = -2)
             if rescale: label = '{:.0f}%'.format(x)
             else:       label = '{:.2f}'.format(x * 1e-2)
-            ax.annotate(label,[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
+            ax[0].annotate(label,[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
         for x in graylines:
-            ax.plot([1e-2 * x,1e-2 * x],[0.6,-j-0.4], lw = 1, c = 'gray',zorder = -2)
+            ax[0].plot([1e-2 * x,1e-2 * x],[0.6,-j-0.4], lw = 1, c = 'gray',zorder = -2)
             if rescale: label = '{:.0f}%'.format(x)
             else:       label = '{:.2f}'.format(x * 1e-2)
-            ax.annotate(label,[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
+            ax[0].annotate(label,[1e-2*x,0.9],fontsize = 12, c = 'gray', ha = 'center')
         
         # format output
         if title != '':
             ax.annotate(title,[1e-2 * (-(len(measure_effects.columns) - 3) * labelsize + minplot),1.2], fontsize = 12, weight = 'bold')
-        ax.set_xlim([1e-2 * (-(len(measure_effects.columns) -3 ) * labelsize - 2*border + minplot), 1e-2 * (maxplot+border)])
-        ax.set_ylim([-j-2,1.8])
-        ax.axis('off')
-        fig.savefig(filename, bbox_inches = 'tight')
+        ax[0].set_xlim([1e-2 * (-(len(measure_effects.columns) -3 ) * labelsize - 2*border + minplot), 1e-2 * (maxplot+border)])
+        ax[0].set_ylim([-j-2,1.8])
+        ax[0].axis('off')
+        
+        if savefig:
+            fig.tight_layout()
+            fig.savefig(filename, bbox_inches = 'tight')
 
 
 
