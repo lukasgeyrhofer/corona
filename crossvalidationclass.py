@@ -547,6 +547,8 @@ class CrossValidation(object):
         if not external_axes is None:
             if len(external_axes) >= required_panels:
                 return None, external_axes, False
+            else:
+                raise Exception('Not enough entries in "external_axes" for plot')
         
         fig, axes = plt.subplots(figpanels[0],figpanels[1],figsize = figsize, **additional_subplots_params)
         if required_panels > 1:
@@ -675,7 +677,7 @@ class CrossValidation(object):
     
     
     
-    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
+    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True, xlim = None):
         if isinstance(shiftdays,int):
             shiftdaylist = [shiftdays]
         elif isinstance(shiftdays,(tuple,list,np.ndarray)):
@@ -757,12 +759,18 @@ class CrossValidation(object):
                 for alpha in verticallines:
                     ax[ax_index].vline(x,zorder = 0, lw = 2, alpha = .5, c = '#000000')
                 
-                ax[ax_index].legend(handles = legendhandles )
+                ax[ax_index].legend(handles = legendhandles)
                 ax[ax_index].set_xlabel(r'Penalty Parameter $\alpha$')
-                ax[ax_index].set_ylabel(r'Relative Effect Size')
+                if rescale:
+                    ax[ax_index].set_ylabel(r'Relative $\Delta R_t$')
+                else:
+                    ax[ax_index].set_ylabel(r'$\Delta R_t$')
                 ax[ax_index].annotate('shiftdays = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
                 ax[ax_index].set_ylim(ylim)
                 ax[ax_index].set_xscale('log')
+                
+                if not xlim is None:
+                    ax[ax_index].set_xlim(xlim)
                 
                 ax_index += 1
         
