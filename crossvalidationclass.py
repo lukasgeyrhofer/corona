@@ -441,7 +441,7 @@ class CrossValidation(object):
     
 
     
-    def FinalMeasureEffects(self, drop_zeros = False, rescale = True, include_countries = False, additional_columns = []):
+    def FinalMeasureEffects(self, drop_zeros = False, rescale = False, include_countries = False, additional_columns = []):
         if not self.finalCV is None:
             finalCVrelative                = self.finalCV.copy(deep = True).drop(columns = 'Test Countries', axis = 0).fillna(0)
             if rescale: finalCVrelative    = finalCVrelative.divide(self.finalCV['Intercept'],axis = 0)
@@ -559,7 +559,7 @@ class CrossValidation(object):
     
             
 
-    def PlotPrevalenceEffects(self, external_axes = None, filename = 'prevalence_effects.pdf', ylim = (-.3,.1), figsize = (20,6),drop_zeros = False, rescale = True, textlen = 40):
+    def PlotPrevalenceEffects(self, external_axes = None, filename = 'prevalence_effects.pdf', ylim = (-.3,.1), figsize = (20,6),drop_zeros = False, rescale = False, textlen = 40):
         prevalence = self.EstimateMeasurePrevalence()
         effects    = self.FinalMeasureEffects(drop_zeros = drop_zeros, rescale = rescale)
 
@@ -677,7 +677,7 @@ class CrossValidation(object):
     
     
     
-    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True, xlim = None, legend_parameters = {}, textbreak = 40):
+    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = False, xlim = None, legend_parameters = {}, textbreak = 40):
         if isinstance(shiftdays,int):
             shiftdaylist = [shiftdays]
         elif isinstance(shiftdays,(tuple,list,np.ndarray)):
@@ -781,7 +781,7 @@ class CrossValidation(object):
     
     
 
-    def PlotCVShiftdaySweep(self, external_axes = None, alphalist = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
+    def PlotCVShiftdaySweep(self, external_axes = None, alphalist = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = False):
         if isinstance(alphalist,int):
             alphalist = [alphalist]
         elif alphalist is None:
@@ -882,7 +882,7 @@ class CrossValidation(object):
         
 
 
-    def PlotMeasureListSorted(self, external_axes = None, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40, include_countries = False, rescale = True, entryheight = None):
+    def PlotMeasureListSorted(self, external_axes = None, filename = 'measurelist_sorted.pdf', drop_zeros = False, figsize = (15,30), labelsize = 40, blacklines = [0], graylines = [-30,-20,-10,10], border = 2, title = '', textbreak = 40, include_countries = False, rescale = False, entryheight = None):
         # get plotting area
         minplot      = np.min(blacklines + graylines)
         maxplot      = np.max(blacklines + graylines)
