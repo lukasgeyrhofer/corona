@@ -677,7 +677,7 @@ class CrossValidation(object):
     
     
     
-    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True, xlim = None):
+    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True, xlim = None, legend_parameters = {}, textbreak = 40):
         if isinstance(shiftdays,int):
             shiftdaylist = [shiftdays]
         elif isinstance(shiftdays,(tuple,list,np.ndarray)):
@@ -752,23 +752,24 @@ class CrossValidation(object):
                     yhigh = np.array(high_measures[s_index][measure].values,dtype=np.float)
                     ax[ax_index].fill_between(alphalist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
 
-                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = key,lw=2) for key,value in self.L1colors.items() if key != 'Country Effects']
+                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = textwrap.shorten(key,textbreak) ,lw=2) for key,value in self.L1colors.items() if key != 'Country Effects']
                 if country_effects:
                     legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
                 
-                for alpha in verticallines:
-                    ax[ax_index].vline(x,zorder = 0, lw = 2, alpha = .5, c = '#000000')
                 
-                ax[ax_index].legend(handles = legendhandles)
+                ax[ax_index].legend(handles = legendhandles, **legend_parameters)
                 ax[ax_index].set_xlabel(r'Penalty Parameter $\alpha$')
                 if rescale:
                     ax[ax_index].set_ylabel(r'Relative $\Delta R_t$')
                 else:
                     ax[ax_index].set_ylabel(r'$\Delta R_t$')
-                ax[ax_index].annotate('shiftdays = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
+                ax[ax_index].annotate('s = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
                 ax[ax_index].set_ylim(ylim)
                 ax[ax_index].set_xscale('log')
                 
+                for alpha in verticallines:
+                    ax[ax_index].vlines(alpha,ylim[0],ylim[1],zorder = 0, lw = 1, color = '#000000')
+
                 if not xlim is None:
                     ax[ax_index].set_xlim(xlim)
                 
@@ -780,7 +781,7 @@ class CrossValidation(object):
     
     
 
-    def PlotCVShiftdaySweep(self, external_axes, alphalist = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
+    def PlotCVShiftdaySweep(self, external_axes = None, alphalist = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = True):
         if isinstance(alphalist,int):
             alphalist = [alphalist]
         elif alphalist is None:
@@ -878,79 +879,6 @@ class CrossValidation(object):
             fig.savefig(filename, bbox_inches = 'tight')
     
     
-
-    #def PlotMeasureListValues(self, filename = 'measurelist_values.pdf'):
-        #def significanceColor(beta):
-            #if beta   >  0.00: return 'red'
-            #elif beta == 0.00: return 'lightgray'
-            #else:              return 'black'
-
-        ## amelies colorscheme...                 
-        #colornames  = ['gray','#f563e2','#609cff','#00bec4','#00b938','#b79f00','#f8766c', '#75507b']
-
-        ## collect measure names for labels
-        #measurelist = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, measure_level = 2, enddate = self.__finaldate)
-        #countrylist = [country[13:].strip(']') for country in self.finalModels[0].data.xnames if country[:10] == 'C(Country)']
-        #modelcount  = len(self.finalModels)
-        #intercept   = [self.finalResults[m].params['Intercept'] for m in range(modelcount)]
-
-        ## internal counters to determine position to plot
-        #ypos = 0
-        #groupcolor = 0
-
-        ## define positions for various elements
-        #label_x        = 1
-        #label_x_header = .6
-        #value_x        = 12
-        #value_dx       = 2
-        #boxalpha       = .15
-        
-        ## start plot
-        #fig,ax = plt.subplots(figsize = (14,23))
-        
-        ## country effects
-        #ax.annotate('Country specific effects',[label_x_header, len(countrylist)], c = colornames[groupcolor], weight = 'bold' )
-        #background = plt.Rectangle([label_x - .6, ypos - .65], value_x + (modelcount-1)*2 + .6, len(countrylist) + 1.8, fill = True, fc = colornames[groupcolor], alpha = boxalpha, zorder = 10)
-        #ax.add_patch(background)
-        #for country in countrylist[::-1]:
-            #ax.annotate(country, [label_x, ypos], c= colornames[groupcolor])
-            #for m in range(modelcount):
-                #beta_val = self.finalResults[m].params['C(Country)[T.{}]'.format(country)] / intercept[m]
-                #ax.annotate('{:6.0f}%'.format(beta_val*100),[value_x + m * value_dx, ypos], c = significanceColor(beta_val), ha = 'right')
-            #ypos += 1
-        #groupcolor += 1
-        #ypos+=2 
-
-        ## measure effects
-        #for l1 in L1names[::-1]:
-            #ax.annotate(l1,[label_x_header, ypos + len(measure_level_dict[l1])], c = colornames[groupcolor], weight = 'bold')
-            #L2names = list(measure_level_dict[l1].keys())
-            #L2names.sort()
-            
-            #background = plt.Rectangle([label_x - .6, ypos - .65], value_x + 2*(modelcount-1) + .6, len(measure_level_dict[l1]) + 1.8, fill = True, fc = colornames[groupcolor], alpha = boxalpha, zorder = 10)
-            #ax.add_patch(background)
-            
-            #for l2 in L2names[::-1]:
-                #ax.annotate(l2,[label_x,ypos],c = colornames[groupcolor])
-                #for m in range(modelcount):
-                    #beta_val = self.finalResults[m].params[measure_level_dict[l1][l2]] / intercept[m]
-                    #ax.annotate('{:6.0f}%'.format(beta_val*100),[value_x + m * value_dx, ypos], c = significanceColor(beta_val), ha = 'right')
-                #ypos+=1
-            #ypos+=2
-            #groupcolor += 1
-
-        ## header
-        #ax.annotate(r'shiftdays $s$',[label_x,ypos+1])
-        #ax.annotate(r'Penality parameter $\log_{10}(\alpha)$',[label_x,ypos])
-        #for m in range(modelcount):
-            #ax.annotate('{}'.format(self.finalParameters[m][0]),               [value_x + m*value_dx,ypos+1],ha='right')
-            #ax.annotate('{:.1f}'.format(np.log10(self.finalParameters[m][1])), [value_x + m*value_dx,ypos],ha='right')        
-
-        ## adjust and save
-        #ax.set_xlim([0,value_x + 2 * modelcount])
-        #ax.set_ylim([-1,ypos+2])
-        #ax.axis('off')
-        #fig.savefig(filename, bbox_inches = 'tight')
         
 
 
@@ -992,7 +920,7 @@ class CrossValidation(object):
         
         # format output
         if title != '':
-            ax.annotate(title,[1e-2 * (-(len(measure_effects.columns) - 3) * labelsize + minplot),1.2], fontsize = 12, weight = 'bold')
+            ax[0].annotate(title,[1e-2 * (-(len(measure_effects.columns) - 3) * labelsize + minplot),1.2], fontsize = 12, weight = 'bold')
         ax[0].set_xlim([1e-2 * (-(len(measure_effects.columns) -3 ) * labelsize - 2*border + minplot), 1e-2 * (maxplot+border)])
         ax[0].set_ylim([-j-2,1.8])
         ax[0].axis('off')
