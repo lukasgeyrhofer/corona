@@ -642,8 +642,8 @@ class CrossValidation(object):
                         
                 s_index = (processedCV['shiftdays'] == shiftdays).values
                 alphalist = processedCV[s_index]['alpha']
-                ax[0].plot(alphalist, processedCV[s_index]['R2 Test {}'.format(averaging_type)],     label = 's = {}'.format(shiftdays), **plot_parameters)
-                ax[1].plot(alphalist, processedCV[s_index]['R2 Training {}'.format(averaging_type)], label = 's = {}'.format(shiftdays), **plot_parameters)
+                ax[0].plot(alphalist, processedCV[s_index]['R2 Test {}'.format(averaging_type)],     label = r'$\tau = {}$'.format(shiftdays), **plot_parameters)
+                ax[1].plot(alphalist, processedCV[s_index]['R2 Training {}'.format(averaging_type)], label = r'$\tau = {}$'.format(shiftdays), **plot_parameters)
         
         for i in range(2):
             ax[i].legend()
@@ -763,7 +763,7 @@ class CrossValidation(object):
                     ax[ax_index].set_ylabel(r'Relative $\Delta R_t$')
                 else:
                     ax[ax_index].set_ylabel(r'$\Delta R_t$')
-                ax[ax_index].annotate('s = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
+                ax[ax_index].annotate(r'$\tau = {:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
                 ax[ax_index].set_ylim(ylim)
                 ax[ax_index].set_xscale('log')
                 
@@ -870,7 +870,7 @@ class CrossValidation(object):
                 ax.legend(handles = legendhandles )
                 ax.set_xlabel(r'Penalty Parameter $\alpha$')
                 ax.set_ylabel(r'Relative Effect Size')
-                ax.annotate('shiftdays = ${:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
+                ax.annotate(r'$\tau = {:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
                 ax.set_ylim(ylim)
                 ax.set_xscale('log')            
         
@@ -902,7 +902,7 @@ class CrossValidation(object):
         
         # actual plotting including vertical lines
         if not entryheight is None:
-            figsize = (figsize[0],(len(measure_effects) + 3.8) * entryheight)
+            figsize = (figsize[0],(len(measure_effects) + 4.5) * entryheight)
         fig, ax, savefig = self.CheckExternalAxes(external_axes, figsize, 1)
 
         for j,(index,values) in enumerate(measure_effects.iterrows()):
@@ -920,9 +920,12 @@ class CrossValidation(object):
         
         # format output
         if title != '':
-            ax[0].annotate(title,[1e-2 * (-(len(measure_effects.columns) - 3) * labelsize + minplot),1.2], fontsize = 12, weight = 'bold')
+            ax[0].annotate(title,[1e-2 * (-2*labelsize + minplot),2], fontsize = 12, weight = 'bold')
+        ax[0].annotate('L1 Theme',[1e-2 * (-2*labelsize + minplot), 1], weight = 'bold', fontsize = 12)
+        ax[0].annotate('L2 Category', [1e-2 * (-labelsize + minplot), 1], weight = 'bold', fontsize = 12)
+        ax[0].annotate(r'$\Delta R_t$',[0,2], fontsize = 12)
         ax[0].set_xlim([1e-2 * (-(len(measure_effects.columns) -3 ) * labelsize - 2*border + minplot), 1e-2 * (maxplot+border)])
-        ax[0].set_ylim([-j-2,1.8])
+        ax[0].set_ylim([-j-2,2.5])
         ax[0].axis('off')
         
         if savefig:
