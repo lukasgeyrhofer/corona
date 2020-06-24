@@ -677,7 +677,7 @@ class CrossValidation(object):
     
     
     
-    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = False, xlim = None, legend_parameters = {}, textbreak = 40):
+    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = False, xlim = None, legend_parameters = {}, textbreak = 40, parampos = None):
         if isinstance(shiftdays,int):
             shiftdaylist = [shiftdays]
         elif isinstance(shiftdays,(tuple,list,np.ndarray)):
@@ -711,15 +711,16 @@ class CrossValidation(object):
         
         if country_effects:
             countrycolor    = '#777777'
-            countrylist     = pd.DataFrame({'Country':[country for country in restrictedCV.columns if country[:3] == 'C(C']})
+            
+            if rescale: countrydata = self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).drop(columns = [colname for colname in self.CVresults.columns if colname[:3] != 'C(C' and not colname in ['shiftdays','alpha']])
+            else:       countrydata = self.CVresults.drop(columns = [colname for colname in self.CVresults.columns if colname[:3] != 'C(C' and not colname in ['shiftdays','alpha']])
+            countrydata.columns     = [(lambda x: x if x in ['shiftdays','alpha'] else x[13:].strip(']'))(cn) for cn in countrydata.columns]
+            countrydata['alpha']    = countrydata['alpha'].map('{:.6e}'.format)
+            grouped_country         = countrydata.groupby(by = ['shiftdays','alpha'],as_index=False)
 
-            grouped_country = countrylist.merge(self.CVresults.drop(columns = ['Test Countries']).divide(self.CVresults['Intercept'],axis = 0).T,left_index=True,right_index=True,how='inner').T.merge(self.CVresults[['shiftdays','alpha']],left_index=True,right_index=True,how='inner').fillna(0)
-            grouped_country['alpha'] = grouped_country['alpha'].map('{:.6e}'.format)
-            grouped_country = grouped_country.groupby(by = ['shiftdays','alpha'],as_index=False)
-
-            median_country  = grouped_country.quantile(.5)
-            low_country     = grouped_country.quantile(.025)
-            high_country    = grouped_country.quantile(.975)
+            median_country          = grouped_country.quantile(.5)
+            low_country             = grouped_country.quantile(.025)
+            high_country            = grouped_country.quantile(.975)
 
             median_country['alpha'] = median_country['alpha'].astype(np.float64)
             low_country['alpha']    = low_country['alpha'].astype(np.float64)
@@ -732,19 +733,20 @@ class CrossValidation(object):
         
         for shiftdays in shiftdaylist:
             if shiftdays in self.CVresults['shiftdays']:
+                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = textwrap.shorten(key,textbreak), lw=2) for key,value in self.L1colors.items() if key != 'Country Effects']
 
                 if country_effects:
+                    legendhandles.append(matplotlib.lines.Line2D([0],[0],c = self.L1colors['Country Effects'],label = 'Country Effects', lw=2))
                     s_index = (median_country['shiftdays'] == shiftdays)
                     alphalist = median_country[s_index]['alpha'].values
                     for country in [c for c in median_country.columns if c != 'shiftdays' and c != 'alpha']:
-                        ax.plot(alphalist,median_country[country].values,c = countrycolor,lw = .5)
-                        ylow  = np.array(low_country[country].values,dtype=np.float)
-                        yhigh = np.array(high_country[country].values,dtype=np.float)
-                        ax[ax_index].fill_between(alphalist,y1 = ylow,y2=yhigh,color = countrycolor,alpha = .05)
+                        ax[ax_index].plot(alphalist, median_country[s_index][country].values, c = countrycolor, lw = 2)
+                        ylow  = np.array(low_country[s_index][country].values,  dtype = np.float)
+                        yhigh = np.array(high_country[s_index][country].values, dtype = np.float)
+                        ax[ax_index].fill_between(alphalist, y1 = ylow, y2 = yhigh,color = countrycolor, alpha = .05)
 
                 s_index = (median_measures['shiftdays'] == shiftdays)
                 alphalist = median_measures[s_index]['alpha'].values
-
                 for measure in [m for m in median_measures.columns if m != 'shiftdays' and m != 'alpha']:
                     color = self.L1colors[measuredict[measure]]
                     ax[ax_index].plot(alphalist,median_measures[s_index][measure].values, c = color, lw = 2)
@@ -752,18 +754,17 @@ class CrossValidation(object):
                     yhigh = np.array(high_measures[s_index][measure].values,dtype=np.float)
                     ax[ax_index].fill_between(alphalist,y1 = ylow,y2=yhigh,color = color,alpha = .05)
 
-                legendhandles = [matplotlib.lines.Line2D([0],[0],c = value,label = textwrap.shorten(key,textbreak) ,lw=2) for key,value in self.L1colors.items() if key != 'Country Effects']
-                if country_effects:
-                    legendhandles += [matplotlib.lines.Line2D([0],[0],c = countrycolor,label = 'Country Effects',lw=.5)]
-                
-                
                 ax[ax_index].legend(handles = legendhandles, **legend_parameters)
                 ax[ax_index].set_xlabel(r'Penalty Parameter $\alpha$')
                 if rescale:
                     ax[ax_index].set_ylabel(r'Relative $\Delta R_t$')
                 else:
                     ax[ax_index].set_ylabel(r'$\Delta R_t$')
-                ax[ax_index].annotate(r'$\tau = {:d}$'.format(shiftdays),[np.power(np.min(alphalist),.97)*np.power(np.max(alphalist),0.03),np.max(ylim)*.9])
+                
+                parampos_rescaled = [np.power(np.min(alphalist),.95)*np.power(np.max(alphalist),0.05), ylim[0] * 0.95 + ylim[1] * 0.05]
+                if not parampos is None:
+                    parampos_rescaled = [np.power(np.min(alphalist),1 - parampos[0])*np.power(np.max(alphalist),parampos[0]), ylim[0] * (1-parampos[1]) + ylim[1] * parampos[1]]
+                ax[ax_index].annotate(r'$\tau = {:d}$'.format(shiftdays),parampos_rescaled)
                 ax[ax_index].set_ylim(ylim)
                 ax[ax_index].set_xscale('log')
                 
