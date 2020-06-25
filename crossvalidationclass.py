@@ -677,7 +677,7 @@ class CrossValidation(object):
     
     
     
-    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), verticallines = [], rescale = False, xlim = None, legend_parameters = {}, textbreak = 40, parampos = None):
+    def PlotCVAlphaSweep(self, external_axes = None, shiftdays = None, filename = 'crossval_evaluation.pdf', country_effects = False, measure_effects = True, ylim = (-1,1), figsize = (15,10), rescale = False, xlim = None, legend_parameters = {}, textbreak = 40, parampos = None, highlight_alpha = None):
         if isinstance(shiftdays,int):
             shiftdaylist = [shiftdays]
         elif isinstance(shiftdays,(tuple,list,np.ndarray)):
@@ -768,11 +768,15 @@ class CrossValidation(object):
                 ax[ax_index].set_ylim(ylim)
                 ax[ax_index].set_xscale('log')
                 
-                for alpha in verticallines:
-                    ax[ax_index].vlines(alpha,ylim[0],ylim[1],zorder = 0, lw = 1, color = '#000000')
-
                 if not xlim is None:
                     ax[ax_index].set_xlim(xlim)
+                
+                
+                if not highlight_alpha is None:
+                    if isinstance(highlight_alpha,float):
+                        highlight_alpha = [highlight_alpha]
+                    for alpha in highlight_alpha:
+                        ax[ax_index].vlines(alpha,ylim[0],ylim[1],color = 'black', lw = 1)
                 
                 ax_index += 1
         
