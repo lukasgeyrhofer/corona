@@ -103,7 +103,7 @@ class COVID19_measures(object):
                                                    'Country':             'COUNTRY',
                                                    'CountryCodes':        'ISO',
                                                    'MaxMeasureLevel':     2,
-                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/acaps_covid19_goverment_measures_dataset.xlsx',
+                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/acaps_covid19_government_measures_dataset_0.xlsx',
                                                    'DatafileName':        'ACAPS_covid19_measures.xlxs',
                                                    'DatafileReadOptions': {'sheet_name':'Database'}},
                                         'WHOPHSM':{'dateformat':          '%d/%m/%Y',
