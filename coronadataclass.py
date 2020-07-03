@@ -227,7 +227,7 @@ class CoronaData(object):
         if key.lower() == 'countrylist':
             return self.__countrylist
         elif key.replace('_',' ') in self.__countrylist:
-            return self.CountryData(country = key)
+            return self.CountryData(country = key.replace('_',' '))
         else:
             raise KeyError
 
