@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import os
 import datetime
+import urllib.request
 
 
 class CoronaData(object):
@@ -39,7 +40,7 @@ class CoronaData(object):
 
         self.BASE_URL     = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/'
         self.CONFIRMED    = 'time_series_covid19_confirmed_global.csv'
-        self.DEATH        = 'time_series_covid19_deaths_global.csv'
+        self.DEATHS       = 'time_series_covid19_deaths_global.csv'
         self.RECOVERED    = 'time_series_covid19_recovered_global.csv'
 
         self.CONFIRMED_US = 'time_series_covid19_confirmed_US.csv'
@@ -68,38 +69,38 @@ class CoronaData(object):
 
     def LoadData(self):
         
-        if not os.path.exists(self.CONFIRMED) or not os.path.exists(self.DEATH) or not os.path.exists(self.RECOVERED) or (self.__resolve_US_states and not os.path.exists(self.CONFIRMED_US)) or (self.__resolve_US_states and not os.path.exists(self.DEATHS_US)):
+        if not os.path.exists(self.CONFIRMED) or not os.path.exists(self.DEATHS) or not os.path.exists(self.RECOVERED) or (self.__resolve_US_states and not os.path.exists(self.CONFIRMED_US)) or (self.__resolve_US_states and not os.path.exists(self.DEATHS_US)):
             self.DownloadData()
         
         self.__data_confirmed = pd.read_csv(self.CONFIRMED)
-        self.__data_death     = pd.read_csv(self.DEATH)
+        self.__data_deaths    = pd.read_csv(self.DEATHS)
         self.__data_recovered = pd.read_csv(self.RECOVERED)
         
         self.__countrylist = list(self.__data_confirmed['Country/Region'].unique())
         self.__countrylist.sort()
         
         for country in self.__countrylist:
-            tmp_dates     = self.ConvertDates(self.__data_confirmed.columns[5:], inputformat = self.__input_dateformat)
-            tmp_confirmed = np.array(((self.__data_confirmed[self.__data_confirmed['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
-            tmp_deaths    = np.array(((self.__data_death    [self.__data_death    ['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
-            tmp_recovered = np.array(((self.__data_recovered[self.__data_recovered['Country/Region'] == country].groupby('Country/Region').sum()).T)[3:], dtype = np.int).flatten()
+            tmp_dates     = self.ConvertDates(np.array(self.__data_confirmed.columns[4:]), inputformat = self.__input_dateformat)
+            tmp_confirmed = np.array(self.__data_confirmed[self.__data_confirmed['Country/Region'] == country].groupby(by = 'Country/Region').sum().values[0,2:], dtype = np.int)
+            tmp_deaths    = np.array(self.__data_deaths   [self.__data_deaths   ['Country/Region'] == country].groupby(by = 'Country/Region').sum().values[0,2:], dtype = np.int)
+            tmp_recovered = np.array(self.__data_recovered[self.__data_recovered['Country/Region'] == country].groupby(by = 'Country/Region').sum().values[0,2:], dtype = np.int)
             
             self.AddCountryData(country, tmp_dates, tmp_confirmed, tmp_deaths, tmp_recovered)
 
         if self.__resolve_US_states:
             
-            self.__data_confirmed_us = pd.read_csv(self.CONFIRMED_US, index_col = 0)
-            self.__data_deaths_us    = pd.read_csv(self.DEATHS_US, index_col = 0)
+            self.__data_confirmed_us = pd.read_csv(self.CONFIRMED_US)
+            self.__data_deaths_us    = pd.read_csv(self.DEATHS_US)
             
             statelist = list(self.__data_confirmed_us['Province_State'].unique())
             
             for state in statelist:
                 tmp_dates_us     = self.ConvertDates(self.__data_confirmed_us.columns[11:], inputformat = self.__input_dateformat)
-                tmp_confirmed_us = np.array(((self.__data_confirmed_us[self.__data_confirmed_us['Province_State'] == state].groupby('Province_State').sum()).T)[5:],dtype = np.int).flatten()
-                tmp_deaths_us    = np.array(((self.__data_confirmed_us[self.__data_confirmed_us['Province_State'] == state].groupby('Province_State').sum()).T)[5:],dtype = np.int).flatten()
+                tmp_confirmed_us = np.array(self.__data_confirmed_us[self.__data_confirmed_us['Province_State'] == state].groupby(by = 'Province_State').sum().values[0,5:], dtype = np.int)
+                tmp_deaths_us    = np.array(self.__data_deaths_us   [self.__data_deaths_us   ['Province_State'] == state].groupby(by = 'Province_State').sum().values[0,6:], dtype = np.int)
                 tmp_recovered_us = np.zeros_like(tmp_confirmed_us)
                 
-                self.AddCountryData('US - {}'.format(state), tmp_dates, tmp_confirmed_us, tmp_deaths_us, tmp_recovered_us)
+                self.AddCountryData('US - {}'.format(state), tmp_dates_us, tmp_confirmed_us, tmp_deaths_us, tmp_recovered_us)
                 self.countrylist.append('US - {}'.format(state))
             
             if not self.__keep_US:
@@ -110,6 +111,7 @@ class CoronaData(object):
             
 
     def AddCountryData(self,countryname, dates, confirmed, deaths, recovered):
+        #print('{:25s} {:3d} {:3d} {:3d} {:3d}'.format(countryname,len(dates),len(confirmed),len(deaths),len(recovered)))
         self.__data[countryname] = pd.DataFrame({ 'Date': dates, 'Confirmed': confirmed, 'Deaths': deaths, 'Recovered': recovered})
         if len(dates) > self.__maxtrajectorylength:
             self.__maxtrajectorylength = len(dates)
@@ -118,20 +120,13 @@ class CoronaData(object):
 
     def DownloadData(self):
         # download data and store locally
-        data_confirmed = pd.read_csv(self.BASE_URL + self.CONFIRMED)
-        data_deaths    = pd.read_csv(self.BASE_URL + self.DEATH)
-        data_recovered = pd.read_csv(self.BASE_URL + self.RECOVERED)
-        
-        data_confirmed.to_csv(self.CONFIRMED)
-        data_deaths.to_csv(self.DEATH)
-        data_recovered.to_csv(self.RECOVERED)
+        urllib.request.urlretrieve(self.BASE_URL + self.CONFIRMED, self.CONFIRMED)
+        urllib.request.urlretrieve(self.BASE_URL + self.DEATHS,    self.DEATHS)
+        urllib.request.urlretrieve(self.BASE_URL + self.RECOVERED, self.RECOVERED)
 
         if self.__resolve_US_states:
-            data_confirmed_us = pd.read_csv(self.BASE_URL + self.CONFIRMED_US)
-            data_deaths_us    = pd.read_csv(self.BASE_URL + self.DEATHS_US)
-            
-            data_confirmed_us.to_csv(self.CONFIRMED_US)
-            data_deaths_us.to_csv(self.DEATHS_US)
+            urllib.request.urlretrieve(self.BASE_URL + self.CONFIRMED_US, self.CONFIRMED_US)
+            urllib.request.urlretrieve(self.BASE_URL + self.DEATHS_US,    self.DEATHS_US)
         
         
     
