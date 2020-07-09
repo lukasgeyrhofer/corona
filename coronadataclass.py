@@ -60,6 +60,8 @@ class CoronaData(object):
         
         self.__date_as_index     = kwargs.get('DateAsIndex', False)
         
+        self.columnlist          = ['Confirmed','Deaths','Recovered']
+        
         if kwargs.get('download_data',False):
             self.DownloadData()
             
@@ -174,7 +176,7 @@ class CoronaData(object):
         if country in self.__countrylist:
             if (not windowsize is None) and (not stddev is None):
                 if stddev > 0:
-                    returnDF = self.__data[country].rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev)
+                    returnDF = self.__data[country][self.columnlist].diff().rolling(window = windowsize, win_type = 'gaussian', min_periods = 1, center = True).mean(std = stddev).cumsum()
                     returnDF['Date'] = self.__data[country]['Date'].values
                     if dateasindex:
                         return returnDF.set_index('Date', drop = True)
