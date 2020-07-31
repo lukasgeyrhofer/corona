@@ -84,6 +84,8 @@ class COVID19_measures(object):
         self.__resolve_US_states  = kwargs.get('resolve_US_states',    False)
         self.__removedcountries   = []
         
+        self.__max_date_check     = 40 # how many days back from today
+        
         self.__datasource         = kwargs.get('datasource','CSH').upper()
         self.__datasourceinfo     = {   'CSH':    {'dateformat':          '%Y-%m-%d',
                                                    'Country':             'Country',
@@ -104,17 +106,22 @@ class COVID19_measures(object):
                                                    'CountryCodes':        'ISO',
                                                    'MaxMeasureLevel':     2,
                                                    'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/acaps_covid19_government_measures_dataset_0.xlsx',
-                                                   'DatafileName':        'ACAPS_covid19_measures.xlxs',
+                                                   'DatafileName':        'ACAPS_covid19_measures.xlsx',
                                                    'DatafileReadOptions': {'sheet_name':'Database'}},
                                         'WHOPHSM':{'dateformat':          '%d/%m/%Y',
                                                    'Country':             'country_territory_area',
                                                    'CountryCodes':        'iso',
-                                                   'DownloadURL':         'https://www.who.int/docs/default-source/documents/phsm/phsm-who.zip',
-                                                   'DatafileName':        'who_phsm.csv',
+                                                   'DownloadURL':         'https://www.who.int/docs/default-source/documents/phsm/{DATE}-phsm-who-int.zip',
+                                                   'DownloadURL_dateformat': '%Y%m%d',
+                                                   'DownloadFilename':    'who_phsm.zip',
+                                                   'DatafileName':        'who_phsm.xlsx',
                                                    'MaxMeasureLevel':      2,
                                                    'DatafileReadOptions': {'encoding':'latin-1'}}
                                     }
 
+        if not self.__datasource in self.__datasourceinfo.keys():
+            raise NotImplementedError('Implemented databases: [' + ', '.join('{}'.format(dbname) for dbname in self.__datasourceinfo.keys()) + ']')
+        
         self.__update_dsinfo = kwargs.get('datasourceinfo',None)
         if not self.__update_dsinfo is None:
             self.__datasourceinfo[self.__datasource].update(self.__update_dsinfo)
@@ -127,45 +134,70 @@ class COVID19_measures(object):
         else:
             self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['Country']
             self.__USname         = 'United States of America'
-
-
         
-        if self.__datasource in self.__datasourceinfo.keys():
-            self.ReadData()
-        else:
-            raise NotImplementedError
+        # after setting all options and parameters: load data
+        self.ReadData()
 
 
+    def URLexists(self, url):
+        request = urllib.request.Request(url)
+        request.get_method = lambda: 'HEAD'
+        try:
+            urllib.request.urlopen(request)
+            return True
+        except urllib.request.HTTPError:
+            return False
 
+
+    def filetype(self, datasource = None, filename = None):
+        if filename is None:
+            filename = self.__datasourceinfo[datasource]['DatafileName']
+        return os.path.splitext(filename)[1].strip('.').upper()
+    
+    
     def DownloadData(self):
-        urllib.request.urlretrieve(self.__datasourceinfo[self.__datasource]['DownloadURL'],self.__datasourceinfo[self.__datasource]['DatafileName'])
+        # if cannot directly download CSV files, but need to download something else first
+        if 'DownloadFilename' in self.__datasourceinfo[self.__datasource].keys():
+            download_savefile = self.__datasourceinfo[self.__datasource]['DownloadFilename']
+        else:
+            download_savefile = self.__datasourceinfo[self.__datasource]['DatafileName']
+        
+        # if download filename contains a date, try different dates, starting from today, with max (self.__max_date_check) days back
+        if '{DATE}' in self.__datasourceinfo[self.__datasource]['DownloadURL']:
+            d = 0
+            while not self.URLexists(self.__datasourceinfo[self.__datasource]['DownloadURL'].format(DATE = (datetime.datetime.today() - datetime.timedelta(days = d)).strftime(self.__datasourceinfo[self.__datasource]['DownloadURL_dateformat']))):
+                d += 1
+                if d >= self.__max_date_check:
+                    break
+            download_url = self.__datasourceinfo[self.__datasource]['DownloadURL'].format(DATE = (datetime.datetime.today() - datetime.timedelta(days = d)).strftime(self.__datasourceinfo[self.__datasource]['DownloadURL_dateformat']))
+        else:
+            download_url = self.__datasourceinfo[self.__datesource]['DownloadURL']
+        
+        # download actual data
+        urllib.request.urlretrieve(download_url, download_savefile)
 
         # download for WHO PHSM comes as zipfile. need to extract file first
         if self.__datasource == 'WHOPHSM':
-            who_archive = zipfile.ZipFile('phsm-who.zip')
+            who_archive = zipfile.ZipFile(download_savefile)
+            who_filename = None
             for fileinfo in who_archive.infolist():
-                if '.csv' in fileinfo.filename:
+                if self.filetype(filename = fileinfo.filename) in ['CSV','XLSX']:
                     who_archive.extract(fileinfo)
                     who_filename = fileinfo.filename
-            os.rename(who_filename,self.__datasourceinfo['WHOPHSM']['DatafileName'])
-
+            if not who_filename is None:
+                os.rename(who_filename, self.__datasourceinfo['WHOPHSM']['DatafileName'])
+            else:
+                raise IOError('did not find appropriate files in ZIP archive')
 
     
-    def convertDate(self,datestr, inputformat = None, outputformat = None):
+    def convertDate(self, datestr, inputformat = None, outputformat = None):
         if inputformat is None: inputformat = self.__datasourceinfo[self.__datasource]['dateformat']
         if outputformat is None: outputformat = self.__dateformat
-        return datetime.datetime.strptime(str(datestr),inputformat).strftime(outputformat)
+        if isinstance(datestr, (list, tuple, np.ndarray, pd.Series)):
+                          return [self.convertDate(x, inputformat = inputformat, outputformat = outputformat) for x in datestr]
+        return datetime.datetime.strptime(datestr,inputformat).strftime(outputformat)
 
 
-
-    def filetype(self, datasource = None):
-        return str(os.path.splitext(self.__datasourceinfo[datasource]['DatafileName'])[1]).strip('.').upper()
-
-
-
-    
-    
-    
     def ReadData(self):
         def CleanWHOName(name):
             return name.replace('nan -- ','').replace(' -- nan','')
@@ -173,9 +205,9 @@ class COVID19_measures(object):
         if not os.path.exists(self.__datasourceinfo[self.__datasource]['DatafileName']) or self.__downloaddata:
             self.DownloadData()
         
-        if self.filetype(self.__datasource) == 'CSV':
+        if self.filetype(datasource = self.__datasource) == 'CSV':
             readdata       = pd.read_csv(self.__datasourceinfo[self.__datasource]['DatafileName'],**self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
-        elif self.filetype(self.__datasource) == 'XLXS':
+        elif self.filetype(datasource = self.__datasource) == 'XLSX':
             readdata       = pd.read_excel(self.__datasourceinfo[self.__datasource]['DatafileName'], **self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
         else:
             raise NotImplementedError
@@ -245,7 +277,7 @@ class COVID19_measures(object):
             self.__data.dropna(subset = ['Date'], inplace = True)
             self.__data.drop(self.__data[self.__data['Measure_L2'] == 'nan'].index, inplace = True)
             self.__data.drop(self.__data[self.__data['Measure_L2'] == 'unkown -- unknown'].index, inplace = True)
-            self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
+            self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
         
         
         else:
