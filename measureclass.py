@@ -360,7 +360,7 @@ class COVID19_measures(object):
             mgdata                = {k.strip():self.SortDates(v) for k,v in dict(mgdata.apply(list)).items()}
             if only_first_dates:
                 mgdata            = {k:[v[0]] for k,v in mgdata.items()}
-                
+            
             return mgdata
         else:
             return None
@@ -407,13 +407,16 @@ class COVID19_measures(object):
 
 
 
-    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = True, only_pulse = False, binary_output = False, extend_measure_names = False):
+    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = True, only_pulse = False, binary_output = False, extend_measure_names = False, mincount = None):
         if country in self.__countrylist:
+            measurelist = self.MeasureList(measure_level = measure_level, mincount = mincount)
             countrydata  = self.CountryData(country = country, measure_level = measure_level, only_first_dates = False, extend_measure_names = extend_measure_names)
             ret_imptable = pd.DataFrame( { self.CleanUpMeasureName(measurename, clean_up = clean_measurename):
                                            self.dates2vector(implemented, start = startdate, end = enddate, shiftdays = shiftdays, maxlen = maxlen, only_pulse = only_pulse, binary_output = binary_output)
                                            for measurename, implemented in countrydata.items() } )
             ret_imptable.index = [(datetime.datetime.strptime(startdate,'%d/%m/%Y') + datetime.timedelta(days = i)).strftime(self.__dateformat) for i in range(len(ret_imptable))]
+            # check to only return Measures that are in measurelist (which funnels mincount)
+            ret_imptable = ret_imptable[ret_imptable.columns[ret_imptable.columns.isin(measurelist.index)]]
             return ret_imptable
 
         else:
