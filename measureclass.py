@@ -116,7 +116,13 @@ class COVID19_measures(object):
                                                    'DownloadFilename':    'who_phsm.zip',
                                                    'DatafileName':        'who_phsm.xlsx',
                                                    'MaxMeasureLevel':      2,
-                                                   'DatafileReadOptions': {'encoding':'latin-1'}}
+                                                   'DatafileReadOptions': {'encoding':'latin-1'}},
+                                        'CORONANET':{'dateformat':        '%Y-%m-%d',
+                                                   'DownloadURL':         'http://coronanet-project.org/data/coronanet_release.csv',
+                                                   'DatafileName':        'coronanet_release.csv',
+                                                   'MaxMeasureLevel':     3,
+                                                   'Country':             'country',
+                                                   'DatafileReadOptions': {}}
                                     }
 
         if not self.__datasource in self.__datasourceinfo.keys():
@@ -279,6 +285,17 @@ class COVID19_measures(object):
             self.__data.drop(self.__data[self.__data['Measure_L2'] == 'unkown -- unknown'].index, inplace = True)
             self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
         
+        
+        elif self.__datasource == 'CORONANET':
+            self.__data = readdata[[self.__countrycolumn, 'date_start', 'type', 'type_sub_cat', 'type_text']].copy(deep = True)
+            self.__data.columns = [self.__countrycolumn,'Date', 'Measure_L1', 'Measure_L2', 'Measure_L3']
+            self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
+            # general measures seem to have no L2 description, thus if empty, copy L1
+            self.__data['Measure_L2'].fillna(self.__data['Measure_L1'], inplace = True)
+            
+                
+                
+            
         
         else:
             NotImplementedError
