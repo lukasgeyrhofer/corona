@@ -122,6 +122,12 @@ class COVID19_measures(object):
                                                    'DatafileName':        'coronanet_release.csv',
                                                    'MaxMeasureLevel':     3,
                                                    'Country':             'country',
+                                                   'DatafileReadOptions': {}},
+                                        'HITCOVID':{'dateformat':         '%Y-%m-%d',
+                                                   'DownloadURL':         'https://github.com/HopkinsIDD/hit-covid/raw/master/data/hit-covid-longdata.csv',
+                                                   'DatafileName':        'hit-covid-longdata.csv',
+                                                   'MaxMeasureLevel':     2,
+                                                   'Country':             'country_name',
                                                    'DatafileReadOptions': {}}
                                     }
 
@@ -177,7 +183,7 @@ class COVID19_measures(object):
                     break
             download_url = self.__datasourceinfo[self.__datasource]['DownloadURL'].format(DATE = (datetime.datetime.today() - datetime.timedelta(days = d)).strftime(self.__datasourceinfo[self.__datasource]['DownloadURL_dateformat']))
         else:
-            download_url = self.__datasourceinfo[self.__datesource]['DownloadURL']
+            download_url = self.__datasourceinfo[self.__datasource]['DownloadURL']
         
         # download actual data
         urllib.request.urlretrieve(download_url, download_savefile)
@@ -201,7 +207,7 @@ class COVID19_measures(object):
         if outputformat is None: outputformat = self.__dateformat
         if isinstance(datestr, (list, tuple, np.ndarray, pd.Series)):
                           return [self.convertDate(x, inputformat = inputformat, outputformat = outputformat) for x in datestr]
-        return datetime.datetime.strptime(datestr,inputformat).strftime(outputformat)
+        return datetime.datetime.strptime(str(datestr),inputformat).strftime(outputformat)
 
 
     def ReadData(self):
@@ -217,8 +223,13 @@ class COVID19_measures(object):
             readdata       = pd.read_excel(self.__datasourceinfo[self.__datasource]['DatafileName'], **self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
         else:
             raise NotImplementedError
+        
+        # set a preliminary countrylist, is updated again at the end
         self.__countrylist = list(readdata[self.__countrycolumn].unique())
         
+        
+        # individual loading code for the different databases
+        # internal structure of the data: data.columns = [self.__countrycolumn, 'Date', 'Measure_L1', 'Measure_L2', ... ]
         
         if self.__datasource == 'CSH':
             # store CSV directly as data
@@ -252,7 +263,7 @@ class COVID19_measures(object):
             measurecolumns = []
             for mc in readdata.columns:
                 if not re.search('^[CEH]\d+\_',mc) is None:
-                    if mc[-7:].lower() != 'general' and mc[-5:].lower() != 'notes':
+                    if mc[-7:].lower() != 'general' and mc[-5:].lower() != 'notes' and mc[-4:].lower() != 'flag':
                         measurecolumns.append(mc)
             
             # reconstruct same structure of CSH DB bottom up
@@ -294,7 +305,11 @@ class COVID19_measures(object):
             self.__data['Measure_L2'].fillna(self.__data['Measure_L1'], inplace = True)
             
                 
-                
+        elif self.__datasource == 'HITCOVID':
+            self.__data = readdata[[self.__countrycolumn, 'date_of_update', 'intervention_group', 'intervention_name']].copy(deep = True)
+            self.__data.columns = [self.__countrycolumn, 'Date', 'Measure_L1', 'Measure_L2']
+            self.__data.dropna(inplace = True)
+            self.__data['Data'] = self.__data['Date'].apply(self.convertDate)
             
         
         else:
