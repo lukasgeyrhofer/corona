@@ -227,11 +227,8 @@ class CrossValidation(object):
                                                                         startdate         = datetime.datetime.strftime(datevector[0],'%d/%m/%Y'),
                                                                         enddate           = datetime.datetime.strftime(datevector[-1],'%d/%m/%Y'),
                                                                         shiftdays         = shiftdays,
-                                                                        clean_measurename = True)
-                    # remove measures not in list
-                    for measurename in DF_country.columns:
-                        if measurename not in measurelist.index:
-                            DF_country.drop(labels = measurename, axis = 'columns', inplace = True)
+                                                                        clean_measurename = True,
+                                                                        mincount          = self.__MinMeasureCount)
                     
                     # additional statistical tests to shuffle data
                     if str(self.__date_randomize).upper() == 'DISTRIBUTION':
