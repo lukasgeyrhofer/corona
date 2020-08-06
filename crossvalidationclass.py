@@ -568,9 +568,9 @@ class CrossValidation(object):
         for l1name, l1group in combined.groupby(by = 'Measure_L1'):
             errors = (l1group[['median','high']].values - l1group[['low','median']].values).T
 
-            ax[0].errorbar(x = l1group['Prevalence All Countries'],             y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen))
-            ax[1].errorbar(x = l1group['Prevalence Implementing Countries'],    y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen))
-            ax[2].errorbar(x = l1group['Fraction of Implementating Countries'], y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen))
+            ax[0].errorbar(x = l1group['Prevalence All Countries'],             y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen), c = self.L1colors[l1name])
+            ax[1].errorbar(x = l1group['Prevalence Implementing Countries'],    y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen), c = self.L1colors[l1name])
+            ax[2].errorbar(x = l1group['Fraction of Implementating Countries'], y = l1group['median'], yerr = errors, marker = 'o', ls = 'none', label = textwrap.shorten(l1name,textlen), c = self.L1colors[l1name])
             
         for i in range(len(ax)):
             ax[i].set_xlim([0,1])
