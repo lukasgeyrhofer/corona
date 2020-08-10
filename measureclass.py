@@ -105,7 +105,7 @@ class COVID19_measures(object):
                                                    'Country':             'COUNTRY',
                                                    'CountryCodes':        'ISO',
                                                    'MaxMeasureLevel':     2,
-                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/acaps_covid19_government_measures_dataset_0.xlsx',
+                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/acaps_covid19_government_measures_dataset.xlsx',
                                                    'DatafileName':        'ACAPS_covid19_measures.xlsx',
                                                    'DatafileReadOptions': {'sheet_name':'Database'}},
                                         'WHOPHSM':{'dateformat':          '%d/%m/%Y',
@@ -417,7 +417,7 @@ class COVID19_measures(object):
 
     def CleanUpMeasureName(self, measurename = '', clean_up = True):
         if isinstance(measurename,str) and clean_up:
-                return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('-',' ').replace('_',' ').split(' ')])
+                return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('.','').replace('-',' ').replace('_',' ').replace('(',' ').replace(')',' ').split(' ')])
         return measurename
 
 
