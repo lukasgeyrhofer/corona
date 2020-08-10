@@ -15,7 +15,7 @@ class COVID19_measures(object):
 
     multiple sources for implemented measures possible:
     
-    * CSH
+    * CCCSL
        https://github.com/amel-github/covid19-interventionmeasures
        compiled by Desvars-Larrive et al (2020), CC-BY-SA 4.0
     * Oxford
@@ -26,15 +26,26 @@ class COVID19_measures(object):
        https://www.acaps.org/covid19-government-measures-dataset
        info@acaps.org
        README: https://www.acaps.org/sites/acaps/files/key-documents/files/acaps_covid-19_government_measures_dataset_readme.pdf
+    * WHOPHSM
+       https://www.who.int/emergencies/diseases/novel-coronavirus-2019/phsm
+       PHSMCOVID19@who.int
+    * CORONANET
+       https://www.coronanet-project.org/
+       Cheng, Barceló, Hartnett, Kubinec, Messerschmidt. COVID-19 Government Response Event Dataset (CoronaNet v1.0). Nature Human Behaviour (2020).
+       https://doi.org/10.1038/s41562-020-0909-7
+    * HIT-COVID
+       https://akuko.io/post/covid-intervention-tracking
+       https://github.com/HopkinsIDD/hit-covid
+
        
-    read table of measures from CSV file,
-    and download data from github if not present or forced
+    read table of measures from file,
+    and download data from source if not present or forced
     
     main usage:
     ( with default options )
     ***************************************************
         # initialize dataset    
-        measure_data = COVID19_measures( datasource           = 'CSH',
+        measure_data = COVID19_measures( datasource           = 'CCCSL',
                                          download_data        = False,
                                          measure_level        = 2,
                                          only_first_dates     = False,
@@ -84,10 +95,10 @@ class COVID19_measures(object):
         self.__resolve_US_states  = kwargs.get('resolve_US_states',    False)
         self.__removedcountries   = []
         
-        self.__max_date_check     = 40 # how many days back from today
+        self.__max_date_check     = 40 # how many days back from today, used so far only in HIT-COVID, which has upload date in their filenames
         
-        self.__datasource         = kwargs.get('datasource','CSH').upper()
-        self.__datasourceinfo     = {   'CSH':    {'dateformat':          '%Y-%m-%d',
+        self.__datasource         = kwargs.get('datasource','CCCSL').upper()
+        self.__datasourceinfo     = {   'CCCSL':  {'dateformat':          '%Y-%m-%d',
                                                    'Country':             'Country',
                                                    'CountryCodes':        'iso3c',
                                                    'MaxMeasureLevel':     4,
@@ -231,11 +242,11 @@ class COVID19_measures(object):
         # individual loading code for the different databases
         # internal structure of the data: data.columns = [self.__countrycolumn, 'Date', 'Measure_L1', 'Measure_L2', ... ]
         
-        if self.__datasource == 'CSH':
+        if self.__datasource == 'CCCSL':
             # store CSV directly as data
             self.__data    = readdata.copy(deep = True)
             self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
-            for i in range(self.__datasourceinfo['CSH']['MaxMeasureLevel']):
+            for i in range(self.__datasourceinfo['CCCSL']['MaxMeasureLevel']):
                 self.__data['Measure_L{:d}'.format(i+1)] = self.__data['Measure_L{:d}'.format(i+1)].str.strip()
             
             # treat each US state as individual country
@@ -266,7 +277,7 @@ class COVID19_measures(object):
                     if mc[-7:].lower() != 'general' and mc[-5:].lower() != 'notes' and mc[-4:].lower() != 'flag':
                         measurecolumns.append(mc)
             
-            # reconstruct same structure of CSH DB bottom up
+            # reconstruct same structure of CCCSL DB bottom up
             self.__data    = None
             for country in self.__countrylist:
                 countrydata = readdata[readdata[self.__countrycolumn] == country]
@@ -309,7 +320,7 @@ class COVID19_measures(object):
             self.__data = readdata[[self.__countrycolumn, 'date_of_update', 'intervention_group', 'intervention_name']].copy(deep = True)
             self.__data.columns = [self.__countrycolumn, 'Date', 'Measure_L1', 'Measure_L2']
             self.__data.dropna(inplace = True)
-            self.__data['Data'] = self.__data['Date'].apply(self.convertDate)
+            self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
             
         
         else:
