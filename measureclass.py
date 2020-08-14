@@ -5,6 +5,8 @@ import datetime
 import re
 import urllib.request
 import zipfile
+import warnings
+
 
 class COVID19_measures(object):
     '''
@@ -13,15 +15,19 @@ class COVID19_measures(object):
     **  github.com/lukasgeyrhofer/corona/            **
     ***************************************************
 
-    multiple sources for implemented measures possible:
+    access multiple databases for measures,
+    choose with option "datasource = DATABASENAME",
+    read table of measures from file,
+    and download data directly from source if not present or forced (option "download_data = True")
     
+
     * CCCSL
+       https://covid19-interventions.com/
        https://github.com/amel-github/covid19-interventionmeasures
-       compiled by Desvars-Larrive et al (2020), CC-BY-SA 4.0
-    * Oxford
+       Desvars-Larrive et al (2020), CC-BY-SA 4.0
+    * OXFORD
        https://www.bsg.ox.ac.uk/research/research-projects/coronavirus-government-response-tracker
-       https://ocgptweb.azurewebsites.net/CSVDownload
-       complied by Hale, Webster, Petherick, Phillips, Kira (2020), CC-BY-SA 4.0
+       Hale, Webster, Petherick, Phillips, Kira (2020), CC-BY-SA 4.0
     * ACAPS
        https://www.acaps.org/covid19-government-measures-dataset
        info@acaps.org
@@ -31,34 +37,30 @@ class COVID19_measures(object):
        PHSMCOVID19@who.int
     * CORONANET
        https://www.coronanet-project.org/
-       Cheng, Barceló, Hartnett, Kubinec, Messerschmidt. COVID-19 Government Response Event Dataset (CoronaNet v1.0). Nature Human Behaviour (2020).
+       Cheng, Barceló, Hartnett, Kubinec, Messerschmidt (2020), CC-BY 4.0
        https://doi.org/10.1038/s41562-020-0909-7
     * HIT-COVID
        https://akuko.io/post/covid-intervention-tracking
        https://github.com/HopkinsIDD/hit-covid
 
        
-    read table of measures from file,
-    and download data from source if not present or forced
-    
     main usage:
     ( with default options )
     ***************************************************
-        # initialize dataset    
+        # initialize dataset
         measure_data = COVID19_measures( datasource           = 'CCCSL',
                                          download_data        = False,
                                          measure_level        = 2,
                                          only_first_dates     = False,
                                          unique_dates         = True,
-                                         extend_measure_names = False )
-
+                                         extend_measure_names = False,
+                                         resolve_US_states    = False )
 
         # dataset is iterable
-        
-        for countryname, measuredata in data:
+        for countryname, measuredata in measure_data:
             # do stuff with measuredata
             # measuredata is dictionary:
-            #   keys: name of measures 
+            #   keys:   name of measures 
             #   values: list of dates when implemented
 
 
@@ -93,6 +95,7 @@ class COVID19_measures(object):
         self.__countrycodes       = kwargs.get('country_codes',        False )
         self.__dateformat         = kwargs.get('dateformat',           '%d/%m/%Y')
         self.__resolve_US_states  = kwargs.get('resolve_US_states',    False)
+        self.__store_raw_data     = kwargs.get('store_raw_data',       False)
         self.__removedcountries   = []
         
         self.__max_date_check     = 40 # how many days back from today, used so far only in HIT-COVID, which has upload date in their filenames
@@ -104,6 +107,7 @@ class COVID19_measures(object):
                                                    'MaxMeasureLevel':     4,
                                                    'DownloadURL':         'https://raw.githubusercontent.com/amel-github/covid19-interventionmeasures/master/COVID19_non-pharmaceutical-interventions_version2_utf8.csv',
                                                    'DatafileName':        'COVID19_non-pharmaceutical-interventions.csv',
+                                                   'USName':              'United States of America',
                                                    'DatafileReadOptions': {'sep': ',', 'quotechar': '"', 'encoding': 'latin-1'}},
                                         'OXFORD': {'dateformat':          '%Y%m%d',
                                                    'Country':             'CountryName',
@@ -111,13 +115,17 @@ class COVID19_measures(object):
                                                    'MaxMeasureLevel':     1,
                                                    'DownloadURL':         'https://raw.githubusercontent.com/OxCGRT/covid-policy-tracker/master/data/OxCGRT_latest.csv',
                                                    'DatafileName':        'OxCGRT_latest.csv',
+                                                   'USDownloadURL':       'https://raw.githubusercontent.com/OxCGRT/covid-policy-tracker/master/data/OxCGRT_US_states_temp.csv',
+                                                   'USDatafileName':      'OxCGRT_US_latest.csv',
+                                                   'USName':              'United States',
                                                    'DatafileReadOptions': {}},
                                         'ACAPS':  {'dateformat':          '%d/%m/%Y',
                                                    'Country':             'COUNTRY',
                                                    'CountryCodes':        'ISO',
                                                    'MaxMeasureLevel':     2,
-                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/acaps_covid19_government_measures_dataset.xlsx',
+                                                   'DownloadURL':         'https://www.acaps.org/sites/acaps/files/resources/files/acaps_covid19_government_measures_dataset_0.xlsx',
                                                    'DatafileName':        'ACAPS_covid19_measures.xlsx',
+                                                   'USName':              'United States of America',
                                                    'DatafileReadOptions': {'sheet_name':'Database'}},
                                         'WHOPHSM':{'dateformat':          '%d/%m/%Y',
                                                    'Country':             'country_territory_area',
@@ -127,18 +135,21 @@ class COVID19_measures(object):
                                                    'DownloadFilename':    'who_phsm.zip',
                                                    'DatafileName':        'who_phsm.xlsx',
                                                    'MaxMeasureLevel':      2,
+                                                   'USName':              'United States Of America',
                                                    'DatafileReadOptions': {'encoding':'latin-1'}},
                                         'CORONANET':{'dateformat':        '%Y-%m-%d',
                                                    'DownloadURL':         'http://coronanet-project.org/data/coronanet_release.csv',
                                                    'DatafileName':        'coronanet_release.csv',
                                                    'MaxMeasureLevel':     3,
                                                    'Country':             'country',
+                                                   'USName':              'United States of America',
                                                    'DatafileReadOptions': {}},
                                         'HITCOVID':{'dateformat':         '%Y-%m-%d',
                                                    'DownloadURL':         'https://github.com/HopkinsIDD/hit-covid/raw/master/data/hit-covid-longdata.csv',
                                                    'DatafileName':        'hit-covid-longdata.csv',
                                                    'MaxMeasureLevel':     2,
                                                    'Country':             'country_name',
+                                                   'USName':              'United States of America',
                                                    'DatafileReadOptions': {}}
                                     }
 
@@ -156,10 +167,26 @@ class COVID19_measures(object):
             self.__USname         = 'USA'
         else:
             self.__countrycolumn  = self.__datasourceinfo[self.__datasource]['Country']
-            self.__USname         = 'United States of America'
+            self.__USname         = self.__datasourceinfo[self.__datasource]['USName']
+        
+        # hard coded list since some databases are a mess when trying to resolve US states. need to check against this
+        self.__USstateList = ['Alabama', 'Alaska', 'American Samoa', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia', 'Guam', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Northern Mariana Islands', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Puerto Rico', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virgin Islands', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming']
+
         
         # after setting all options and parameters: load data
         self.ReadData()
+
+
+    
+    def addDF(self, df1 = None, df2 = None):
+        if not df2 is None:
+            if df1 is None:
+                return df2
+            else:
+                return pd.concat([df1,df2], ignore_index = True, sort = False)
+        else:
+            return df1
+
 
 
     def URLexists(self, url):
@@ -172,10 +199,25 @@ class COVID19_measures(object):
             return False
 
 
+    
+    def GetDownloadURL(self, url):
+        if '{DATE}' in url:
+            d = 0
+            while not self.URLexists(url.format(DATE = (datetime.datetime.today() - datetime.timedelta(days = d)).strftime(self.__datasourceinfo[self.__datasource]['DownloadURL_dateformat']))):
+                d += 1
+                if d >= self.__max_date_check:
+                    break
+            return url.format(DATE = (datetime.datetime.today() - datetime.timedelta(days = d)).strftime(self.__datasourceinfo[self.__datasource]['DownloadURL_dateformat']))
+        else:
+            return url
+        
+
+
     def filetype(self, datasource = None, filename = None):
         if filename is None:
             filename = self.__datasourceinfo[datasource]['DatafileName']
         return os.path.splitext(filename)[1].strip('.').upper()
+    
     
     
     def DownloadData(self):
@@ -186,18 +228,16 @@ class COVID19_measures(object):
             download_savefile = self.__datasourceinfo[self.__datasource]['DatafileName']
         
         # if download filename contains a date, try different dates, starting from today, with max (self.__max_date_check) days back
-        if '{DATE}' in self.__datasourceinfo[self.__datasource]['DownloadURL']:
-            d = 0
-            while not self.URLexists(self.__datasourceinfo[self.__datasource]['DownloadURL'].format(DATE = (datetime.datetime.today() - datetime.timedelta(days = d)).strftime(self.__datasourceinfo[self.__datasource]['DownloadURL_dateformat']))):
-                d += 1
-                if d >= self.__max_date_check:
-                    break
-            download_url = self.__datasourceinfo[self.__datasource]['DownloadURL'].format(DATE = (datetime.datetime.today() - datetime.timedelta(days = d)).strftime(self.__datasourceinfo[self.__datasource]['DownloadURL_dateformat']))
-        else:
-            download_url = self.__datasourceinfo[self.__datasource]['DownloadURL']
+        download_url = self.GetDownloadURL(self.__datasourceinfo[self.__datasource]['DownloadURL'])
         
         # download actual data
         urllib.request.urlretrieve(download_url, download_savefile)
+        
+        # for some databases, resolution on US states needs additional files
+        if self.__resolve_US_states and 'USDownloadURL' in self.__datasourceinfo[self.__datasource].keys():
+            download_url = self.GetDownloadURL(self.__datasourceinfo[self.__datasource]['USDownloadURL'])
+            download_savefile = self.__datasourceinfo[self.__datasource]['USDatafileName']
+            urllib.request.urlretrieve(download_url, download_savefile)
 
         # download for WHO PHSM comes as zipfile. need to extract file first
         if self.__datasource == 'WHOPHSM':
@@ -211,14 +251,20 @@ class COVID19_measures(object):
                 os.rename(who_filename, self.__datasourceinfo['WHOPHSM']['DatafileName'])
             else:
                 raise IOError('did not find appropriate files in ZIP archive')
-
-    
+        
+        
+        
     def convertDate(self, datestr, inputformat = None, outputformat = None):
         if inputformat is None: inputformat = self.__datasourceinfo[self.__datasource]['dateformat']
         if outputformat is None: outputformat = self.__dateformat
         if isinstance(datestr, (list, tuple, np.ndarray, pd.Series)):
                           return [self.convertDate(x, inputformat = inputformat, outputformat = outputformat) for x in datestr]
-        return datetime.datetime.strptime(str(datestr),inputformat).strftime(outputformat)
+                      
+        if isinstance(datestr, pd._libs.tslibs.timestamps.Timestamp):
+            return datestr.dt.strftime(outputformat)
+        else:
+            return datetime.datetime.strptime(str(datestr),inputformat).strftime(outputformat)
+
 
 
     def ReadData(self):
@@ -235,9 +281,16 @@ class COVID19_measures(object):
         else:
             raise NotImplementedError
         
+        if self.__resolve_US_states and 'USDatafileName' in self.__datasourceinfo[self.__datasource].keys():
+            if self.filetype(filename = self.__datasourceinfo[self.__datasource]['USDatafileName']) == 'CSV':
+                readdata_us = pd.read_csv(self.__datasourceinfo[self.__datasource]['USDatafileName'], **self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
+            elif self.filetype(filename = self.__datasourceinfo[self.__datasource]['USDatafileName']) == 'XLSX':
+                readdata_us = pd.read_excel(self.__datasourceinfo[self.__datasource]['USDatafileName'], **self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
+            else:
+                raise NotImplementedError
+        
         # set a preliminary countrylist, is updated again at the end
         self.__countrylist = list(readdata[self.__countrycolumn].unique())
-        
         
         # individual loading code for the different databases
         # internal structure of the data: data.columns = [self.__countrycolumn, 'Date', 'Measure_L1', 'Measure_L2', ... ]
@@ -270,7 +323,7 @@ class COVID19_measures(object):
         elif self.__datasource == 'OXFORD':
             # construct list of measures from DB column names
             # naming scheme is '[CEH][NUMBER]_NAME'
-            # in addition to columns '[CEH][NUMBER]_IsGeneral' and '[CEH][NUMBER]_Notes' for more info
+            # in addition to columns '[CEH][NUMBER]_IsGeneral', '[CEH][NUMBER]_Notes' and '[CEH][NUMBER]_Flag' for more info
             measurecolumns = []
             for mc in readdata.columns:
                 if not re.search('^[CEH]\d+\_',mc) is None:
@@ -288,6 +341,19 @@ class COVID19_measures(object):
                             self.__data = pd.DataFrame({k:np.array([v]) for k,v in db_entry_dict.items()})
                         else:
                             self.__data = self.__data.append(db_entry_dict, ignore_index = True)
+            
+            if self.__resolve_US_states:
+                self.__data.drop(self.__data[self.__data[self.__countrycolumn] == self.__USname].index, inplace = True)
+                self.__us_states = readdata_us['RegionName'].unique()
+                for usstate in self.__us_states:
+                    statedata = readdata_us[readdata_us['RegionName'] == usstate]
+                    for mc in measurecolumns:
+                        for date in statedata[statedata[mc].diff() > 0]['Date']:
+                            db_entry_dict = {self.__countrycolumn: 'US - {}'.format(usstate), 'Date': self.convertDate(date), 'Measure_L1': mc}
+                            if self.__data is None:
+                                self.__data = pd.DataFrame({k:np.array([v]) for k,v in db_entry_dict.items()})
+                            else:
+                                self.__data = self.__data.append(db_entry_dict, ignore_index = True)
         
         
         elif self.__datasource == 'ACAPS':
@@ -295,32 +361,115 @@ class COVID19_measures(object):
             self.__data.columns = [self.__countrycolumn,'Date', 'Measure_L1', 'Measure_L2']
             self.__data.dropna(inplace = True)
             self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
+            if self.__resolve_US_states:
+                warnings.warn('Database "ACAPS" does not support US state resolution')
         
         
         elif self.__datasource == 'WHOPHSM':
             self.__data = readdata[[self.__countrycolumn,'date_start','who_category']].copy(deep = True)
             self.__data.columns = [self.__countrycolumn,'Date','Measure_L1']
             self.__data['Measure_L2'] = (readdata['who_subcategory'].astype(str) + ' -- ' + readdata['who_measure'].astype(str)).apply(CleanWHOName)
-            # some cleanup, might not be enough
+            
+            # some cleanup
             self.__data.dropna(subset = ['Date'], inplace = True)
+            self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
+            
+            # resolve US states
+            if self.__resolve_US_states:
+                self.__data.drop(self.__data[self.__data[self.__countrycolumn] == self.__USname].index, inplace = True)
+                
+                nationwide_data = None
+                for index, datarow in readdata[readdata[self.__countrycolumn] == self.__USname].dropna(subset = ['date_start']).iterrows():
+                    if not datarow['area_covered'] is np.nan:
+                        states = [state.strip() for state in str(datarow['area_covered']).split(',')]
+                        if datarow['admin_level'] == 'state':
+                            for state in states:
+                                if state in self.__USstateList:
+                                    db_entry = pd.DataFrame({self.__countrycolumn: 'US - {}'.format(state),
+                                                            'Date': datarow['date_start'].strftime(self.__dateformat),
+                                                            'Measure_L1': str(datarow['who_category']),
+                                                            'Measure_L2': CleanWHOName(str(datarow['who_subcategory']) + ' -- ' + str(datarow['who_measure']))
+                                                            }, index = [0])
+                                    self.__data = self.addDF(self.__data, db_entry)
+                    elif datarow['admin_level'] == 'national':
+                        nationwide_data = self.addDF(nationwide_data, pd.DataFrame(datarow.to_dict(), index = [0]))
+                
+                us_states = self.__data[self.__data[self.__countrycolumn].str.startswith('US - ')][self.__countrycolumn].unique()
+                for state in us_states:
+                    for index, datarow in nationwide_data.iterrows():
+                        db_entry = pd.DataFrame({self.__countrycolumn: state,
+                                                    'Date': datarow['date_start'].strftime(self.__dateformat),
+                                                    'Measure_L1': str(datarow['who_category']),
+                                                    'Measure_L2': CleanWHOName(str(datarow['who_subcategory']) + ' -- ' + str(datarow['who_measure']))
+                                                    }, index = [0])
+                        self.__data = self.addDF(self.__data, db_entry)
+                        
+            # some cleanup, might not be enough
             self.__data.drop(self.__data[self.__data['Measure_L2'] == 'nan'].index, inplace = True)
             self.__data.drop(self.__data[self.__data['Measure_L2'] == 'unkown -- unknown'].index, inplace = True)
-            self.__data['Date'] = self.__data['Date'].dt.strftime(self.__dateformat)
         
         
         elif self.__datasource == 'CORONANET':
             self.__data = readdata[[self.__countrycolumn, 'date_start', 'type', 'type_sub_cat', 'type_text']].copy(deep = True)
             self.__data.columns = [self.__countrycolumn,'Date', 'Measure_L1', 'Measure_L2', 'Measure_L3']
+            self.__data.dropna(subset = ['Date'], inplace = True)
             self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
+            
+            if self.__resolve_US_states:
+                self.__data.drop(self.__data[self.__data[self.__countrycolumn] == self.__USname].index, inplace = True)
+                readdata_us = readdata[readdata[self.__countrycolumn] == self.__USname].copy(deep = True)
+                us_states = readdata_us['province'].dropna().unique()
+                for i,datarow in readdata_us.iterrows():
+                    db_entry = pd.DataFrame({self.__countrycolumn:'US - {}'.format(datarow['province']),
+                                             'Date': self.convertDate(datarow['date_start']),
+                                             'Measure_L1': datarow['type'],
+                                             'Measure_L2': datarow['type_sub_cat'],
+                                             'Measure_L3': datarow['type_text']}, index = [0])
+                    if not datarow['province'] is np.nan:
+                        # specific measures implemented in a state
+                        self.__data = self.addDF(self.__data, db_entry)
+                    else:
+                        # this seems to code for nationwide measures. add entry to all states
+                        for state in us_states:
+                            if state in self.__USstateList:
+                                db_entry[self.__countrycolumn] = 'US - {}'.format(state)
+                                self.__data = self.addDF(self.__data, db_entry)
+
             # general measures seem to have no L2 description, thus if empty, copy L1
             self.__data['Measure_L2'].fillna(self.__data['Measure_L1'], inplace = True)
             
                 
         elif self.__datasource == 'HITCOVID':
+            # general structure seems similar to CORONANET, columns have different names, though ...
             self.__data = readdata[[self.__countrycolumn, 'date_of_update', 'intervention_group', 'intervention_name']].copy(deep = True)
             self.__data.columns = [self.__countrycolumn, 'Date', 'Measure_L1', 'Measure_L2']
-            self.__data.dropna(inplace = True)
+            self.__data.dropna(subset = ['Date'], inplace = True)
             self.__data['Date'] = self.__data['Date'].apply(self.convertDate)
+            
+            if self.__resolve_US_states:
+                self.__data.drop(self.__data[self.__data[self.__countrycolumn] == self.__USname].index, inplace = True)
+                readdata_us = readdata[readdata[self.__countrycolumn] == self.__USname].dropna(subset = ['date_of_update']).copy(deep = True)
+                us_states = readdata_us['admin1_name'].dropna().unique()
+                for i, datarow in readdata_us.iterrows():
+                    db_entry = pd.DataFrame({self.__countrycolumn: 'US - {}'.format(datarow['admin1_name']),
+                                             'Date': self.convertDate(datarow['date_of_update']),
+                                             'Measure_L1': datarow['intervention_group'],
+                                             'Measure_L2': datarow['intervention_name']
+                                             }, index = [0])
+                    if not datarow['admin1_name'] is np.nan:
+                        self.__data = self.addDF(self.__data, db_entry)
+                    elif str(datarow['national_entry']).upper() == 'YES':
+                        for state in us_states:
+                            if state in self.__USstateList:
+                                db_entry[self.__countrycolumn] = 'US - {}'.format(state)
+                                self.__data = self.addDF(self.__data, db_entry)
+            
+            self.__data.dropna(inplace = True)
+                        
+                                                 
+                    
+                                            
+            
             
         
         else:
@@ -328,12 +477,28 @@ class COVID19_measures(object):
 
         # update countrylist with potential changes during load
         self.__countrylist = list(self.__data[self.__countrycolumn].unique())
+        self.__countrylist.sort()
+        
+        # keep raw data for debug purposes
+        if self.__store_raw_data:   self.rawdata = readdata.copy(deep = True)
+        else:                       self.rawdata = None
 
+    
     
     def RemoveCountry(self, country = None):
         if country in self.__countrylist:
             self.__countrylist.remove(country)
             self.__data = self.__data[self.__data[self.__countrycolumn] != country]
+    
+    
+    
+    def RemoveMeasures(self, measure = '', measure_level = None):
+        if len(measure) > 0:
+            if not measure_level is None:
+                self.__data = self.__data[~self.__data['Measure_L{}'.format(measure_level)].fillna('').str.contains(measure)]
+            else:
+                for measure_level in range(self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']):
+                    self.__data = self.__data[~self.__data['Measure_L{}'.format(measure_level+1)].fillna('').str.contains(measure)]
     
     
     
@@ -375,7 +540,7 @@ class COVID19_measures(object):
             else:
                 countrydata.insert(1, 'MN',np.array(countrydata['Measure_L{:d}'.format(measure_level)]), True)
             
-            # drop all entries which don't have date associated
+            # drop all entries which don't have dates associated
             countrydata           = countrydata[countrydata['Date'].notna()]
             mgdata                = countrydata.groupby(by = 'MN')['Date']
             
@@ -389,6 +554,7 @@ class COVID19_measures(object):
             
             return mgdata
         else:
+            warnings.warn('No data found for country "{}"'.format(country))
             return None
     
     
@@ -491,12 +657,12 @@ class COVID19_measures(object):
     
     
     def __getattr__(self,key):
-        if key in self.__countrylist:
-            return self.CountryData(country = key)
+        if key == 'data':
+            return self.__data
         elif key == 'countrylist':
             return self.__countrylist
-        elif key == 'rawdata':
-            return self.__data  
+        elif key in self.__countrylist:
+            return self.CountryData(country = key)
     
     
     
