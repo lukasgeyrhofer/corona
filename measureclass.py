@@ -281,6 +281,7 @@ class COVID19_measures(object):
         else:
             raise NotImplementedError
         
+        # some DBs have additional files for US state resolution
         if self.__resolve_US_states and 'USDatafileName' in self.__datasourceinfo[self.__datasource].keys():
             if self.filetype(filename = self.__datasourceinfo[self.__datasource]['USDatafileName']) == 'CSV':
                 readdata_us = pd.read_csv(self.__datasourceinfo[self.__datasource]['USDatafileName'], **self.__datasourceinfo[self.__datasource]['DatafileReadOptions'])
@@ -293,7 +294,8 @@ class COVID19_measures(object):
         self.__countrylist = list(readdata[self.__countrycolumn].unique())
         
         # individual loading code for the different databases
-        # internal structure of the data: data.columns = [self.__countrycolumn, 'Date', 'Measure_L1', 'Measure_L2', ... ]
+        # internal structure of the data matched to CCCSL structure
+        # create pd.DataFrame with columns: [self.__countrycolumn, 'Date', 'Measure_L1', 'Measure_L2', ... ]
         
         if self.__datasource == 'CCCSL':
             # store CSV directly as data
@@ -336,11 +338,8 @@ class COVID19_measures(object):
                 countrydata = readdata[readdata[self.__countrycolumn] == country]
                 for mc in measurecolumns:
                     for date in countrydata[countrydata[mc].diff() > 0]['Date']:
-                        db_entry_dict = {self.__countrycolumn: country, 'Date': self.convertDate(date), 'Measure_L1': mc}
-                        if self.__data is None:
-                            self.__data = pd.DataFrame({k:np.array([v]) for k,v in db_entry_dict.items()})
-                        else:
-                            self.__data = self.__data.append(db_entry_dict, ignore_index = True)
+                        db_entry = pd.DataFrame({self.__countrycolumn: country, 'Date': self.convertDate(date), 'Measure_L1': mc}, index = [0])
+                        self.__data = self.addDF(self.__data, db_entry)
             
             if self.__resolve_US_states:
                 self.__data.drop(self.__data[self.__data[self.__countrycolumn] == self.__USname].index, inplace = True)
@@ -349,11 +348,8 @@ class COVID19_measures(object):
                     statedata = readdata_us[readdata_us['RegionName'] == usstate]
                     for mc in measurecolumns:
                         for date in statedata[statedata[mc].diff() > 0]['Date']:
-                            db_entry_dict = {self.__countrycolumn: 'US - {}'.format(usstate), 'Date': self.convertDate(date), 'Measure_L1': mc}
-                            if self.__data is None:
-                                self.__data = pd.DataFrame({k:np.array([v]) for k,v in db_entry_dict.items()})
-                            else:
-                                self.__data = self.__data.append(db_entry_dict, ignore_index = True)
+                            db_entry = pd.DataFrame({self.__countrycolumn: 'US - {}'.format(usstate), 'Date': self.convertDate(date), 'Measure_L1': mc}, index = [0])
+                            self.__data = self.addDF(self.__data, db_entry)
         
         
         elif self.__datasource == 'ACAPS':
@@ -465,11 +461,6 @@ class COVID19_measures(object):
                                 self.__data = self.addDF(self.__data, db_entry)
             
             self.__data.dropna(inplace = True)
-                        
-                                                 
-                    
-                                            
-            
             
         
         else:
