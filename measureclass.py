@@ -617,8 +617,13 @@ class COVID19_measures(object):
     
     
     def MeasureList(self, countrylist = None, measure_level = None, mincount = None, enddate = None):
-        if measure_level is None: measure_level = self.__measurelevel
-        if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']: measure_level = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
+        enforce_measure_level_diff     = 0
+        if measure_level is None:
+            measure_level              = self.__measurelevel
+        if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']:
+            enforce_measure_level_diff = measure_level - self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
+            measure_level              = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
+            
 
         if enddate is None: enddate = datetime.datetime.today().strftime(self.__dateformat)
         mheaders = ['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]
@@ -632,6 +637,10 @@ class COVID19_measures(object):
         measurenameDF.index = list(measurenameDF['Measure_L{:d}'.format(measure_level)].apply(self.CleanUpMeasureName))
 
         if not mincount is None: measurenameDF = measurenameDF[measurenameDF['Countries with Implementation'] >= mincount]
+
+        # repeatedly copy last available column, if more columns are requested with 'measure_level' parameter
+        for ml in range(enforce_measure_level_diff):
+            measurenameDF['Measure_L{}'.format(measure_level + ml + 1)] = measurenameDF['Measure_L{}'.format(measure_level)]
 
         return measurenameDF
     
