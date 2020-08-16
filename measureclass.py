@@ -96,7 +96,7 @@ class COVID19_measures(object):
         self.__dateformat         = kwargs.get('dateformat',           '%d/%m/%Y')
         self.__resolve_US_states  = kwargs.get('resolve_US_states',    False)
         self.__store_raw_data     = kwargs.get('store_raw_data',       False)
-        self.__removedcountries   = []
+        self.__index_name_level   = kwargs.get('index_name_level',     self.__measurelevel)
         
         self.__max_date_check     = 40 # how many days back from today, used so far only in HIT-COVID, which has upload date in their filenames
         
@@ -264,6 +264,26 @@ class COVID19_measures(object):
             return datestr.dt.strftime(outputformat)
         else:
             return datetime.datetime.strptime(str(datestr),inputformat).strftime(outputformat)
+
+
+
+    def AddNumberToDuplicates(self, namelist, seperator=''):
+        if isinstance(namelist, np.ndarray):
+            namelist = list(namelist)
+        for name in namelist:
+            name_count         = namelist.count(name)
+            if name_count > 1:
+                postfix_str    = ''.join([str(i+1) for i in range(name_count)])
+                postfix_iter   = iter(postfix_str)
+                for i in range(name_count):
+                    name_index = namelist.index(name)
+                    namelist[name_index] += seperator + next(postfix_iter)
+        return np.array(namelist)
+
+
+
+    def CleanUpMeasureName(self, measurename = '', clean_up = True):
+        return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('.','').replace('-',' ').replace('_',' ').replace('(',' ').replace(')',' ').split(' ')])
 
 
 
@@ -474,6 +494,12 @@ class COVID19_measures(object):
         if self.__store_raw_data:   self.rawdata = readdata.copy(deep = True)
         else:                       self.rawdata = None
 
+        # generate indexname
+        mheader = ['Measure_L{}'.format(i+1) for i in range(self.__index_name_level)]
+        allmeasures = self.__data[mheader].drop_duplicates()
+        allmeasures['indexname'] = self.AddNumberToDuplicates(allmeasures['Measure_L{}'.format(self.__index_name_level)].apply(self.CleanUpMeasureName).values)
+        self.__data = self.__data.merge(allmeasures, left_on = mheader, right_on = mheader, how = 'left')
+        
     
     
     def RemoveCountry(self, country = None):
@@ -509,9 +535,10 @@ class COVID19_measures(object):
     
     
     
-    def CountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None):
+    def CountryData(self, country = None, measure_level = None, only_first_dates = None, unique_dates = None, extend_measure_names = None, group_on_indexname = False):
         if country in self.__countrylist:
             
+            # if options are not provided, use defaults set at initialization of class
             if measure_level is None:        measure_level        = self.__measurelevel
             if only_first_dates is None:     only_first_dates     = self.__onlyfirstdates
             if unique_dates is None:         unique_dates         = self.__uniquedates
@@ -519,31 +546,22 @@ class COVID19_measures(object):
             
             if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']: measure_level = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
 
-            countrydata           = self.__data[self.__data[self.__countrycolumn] == country].copy(deep = True)
-            if measure_level >= 2:
-                for ml in range(2,measure_level+1):
-                    # fill columns with previous measure levels, if empty (otherwise the empty fields generate errors)
-                    countrydata.loc[:,'Measure_L{:d}'.format(ml)] = countrydata['Measure_L{:d}'.format(ml)].fillna(countrydata['Measure_L{:d}'.format(ml-1)])
-            
-            # make new column, which will be grouped below
-            if extend_measure_names:
-                countrydata.insert(1, 'MN', np.array(countrydata[['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]].agg(' -- '.join, axis = 1)), True)
-            else:
-                countrydata.insert(1, 'MN',np.array(countrydata['Measure_L{:d}'.format(measure_level)]), True)
-            
-            # drop all entries which don't have dates associated
-            countrydata           = countrydata[countrydata['Date'].notna()]
-            mgdata                = countrydata.groupby(by = 'MN')['Date']
-            
-            if unique_dates:
-                mgdata            = mgdata.apply(set)
-            
-            # rebuild as dict
-            mgdata                = {k.strip():self.SortDates(v) for k,v in dict(mgdata.apply(list)).items()}
-            if only_first_dates:
-                mgdata            = {k:[v[0]] for k,v in mgdata.items()}
-            
-            return mgdata
+            retdict = {}
+            for indexname, datagroup in self.__data[self.__data[self.__countrycolumn] == country].groupby(by = 'indexname'):
+                if group_on_indexname:
+                    key = indexname
+                else:
+                    if extend_measure_names:
+                        key = ' -- '.join([datagroup['Measure_L{}'.format(i+1)].values[0] for i in range(measure_level)])
+                    else:
+                        key = datagroup['Measure_L{}'.format(measure_level)].values[0]
+                
+                dates                      = self.SortDates(datagroup['Date'].values)
+                if unique_dates:     dates = list(set(dates))
+                if only_first_dates: dates = [dates[0]]
+                retdict[key] = dates
+                                                           
+            return retdict
         else:
             warnings.warn('No data found for country "{}"'.format(country))
             return None
@@ -583,18 +601,10 @@ class COVID19_measures(object):
 
 
 
-    def CleanUpMeasureName(self, measurename = '', clean_up = True):
-        if isinstance(measurename,str) and clean_up:
-                return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('.','').replace('-',' ').replace('_',' ').replace('(',' ').replace(')',' ').split(' ')])
-        return measurename
-
-
-
-    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, clean_measurename = True, only_pulse = False, binary_output = False, extend_measure_names = False, mincount = None):
+    def ImplementationTable(self, country, measure_level = None, startdate = '22/1/2020', enddate = None, shiftdays = 0, maxlen = None, only_pulse = False, binary_output = False, mincount = None):
         if country in self.__countrylist:
-            countrydata  = self.CountryData(country = country, measure_level = measure_level, only_first_dates = False, extend_measure_names = extend_measure_names)
-            ret_imptable = pd.DataFrame( { self.CleanUpMeasureName(measurename, clean_up = clean_measurename):
-                                           self.dates2vector(implemented, start = startdate, end = enddate, shiftdays = shiftdays, maxlen = maxlen, only_pulse = only_pulse, binary_output = binary_output)
+            countrydata  = self.CountryData(country = country, measure_level = measure_level, only_first_dates = False, group_on_indexname = True)
+            ret_imptable = pd.DataFrame( { measurename: self.dates2vector(implemented, start = startdate, end = enddate, shiftdays = shiftdays, maxlen = maxlen, only_pulse = only_pulse, binary_output = binary_output)
                                            for measurename, implemented in countrydata.items() } )
             ret_imptable.index = [(datetime.datetime.strptime(startdate,'%d/%m/%Y') + datetime.timedelta(days = i)).strftime(self.__dateformat) for i in range(len(ret_imptable))]
             # check to only return Measures that are in measurelist (which funnels mincount)
@@ -623,19 +633,32 @@ class COVID19_measures(object):
         if measure_level > self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']:
             enforce_measure_level_diff = measure_level - self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
             measure_level              = self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']
-            
-
-        if enddate is None: enddate = datetime.datetime.today().strftime(self.__dateformat)
-        mheaders = ['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]
+        
+        # get list ['Measure_L1', 'Measure_L2', ...]
+        mheaders = ['indexname'] + ['Measure_L{:d}'.format(ml+1) for ml in range(measure_level)]
+        
+        # copy from rawdata
         measurenameDF = pd.DataFrame(self.__data[mheaders + [self.__countrycolumn,'Date']]).replace(np.nan, '', regex = True)
+        
+        # only keep entries before enddata (set enddate to today if not specified)
+        if enddate is None: enddate = datetime.datetime.today().strftime(self.__dateformat)
         measurenameDF.drop(measurenameDF[measurenameDF['Date'].apply(lambda x:datetime.datetime.strptime(x,self.__dateformat) > datetime.datetime.strptime(enddate,self.__dateformat))].index, inplace = True)
+        
+        # drop 'Date' column, then multiple entries for same measure in same country are indistinguishable. then drop all duplicates
         measurenameDF.drop('Date', axis = 'columns', inplace = True)
         measurenameDF.drop_duplicates(inplace = True)
+        
+        # if countrylist is explicitely specified, drop all entries not in these countries
         if not countrylist is None: measurenameDF = measurenameDF[measurenameDF[self.__countrycolumn].isin(countrylist)]
+        
+        # count countries with implementations by grouping
         measurenameDF = measurenameDF.groupby(by = mheaders, as_index=False).count()
         measurenameDF.columns = mheaders + ['Countries with Implementation']
-        measurenameDF.index = list(measurenameDF['Measure_L{:d}'.format(measure_level)].apply(self.CleanUpMeasureName))
+        
+        # set index with cleaned measurename
+        measurenameDF.set_index('indexname', drop = True, inplace = True)
 
+        # restrict to measures that are implemented in at least 'mincount' countries
         if not mincount is None: measurenameDF = measurenameDF[measurenameDF['Countries with Implementation'] >= mincount]
 
         # repeatedly copy last available column, if more columns are requested with 'measure_level' parameter
