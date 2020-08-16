@@ -495,6 +495,7 @@ class COVID19_measures(object):
         else:                       self.rawdata = None
 
         # generate indexname
+        self.__index_name_level = np.min([self.__index_name_level, self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']])
         mheader = ['Measure_L{}'.format(i+1) for i in range(self.__index_name_level)]
         allmeasures = self.__data[mheader].drop_duplicates()
         allmeasures['indexname'] = self.AddNumberToDuplicates(allmeasures['Measure_L{}'.format(self.__index_name_level)].apply(self.CleanUpMeasureName).values)
