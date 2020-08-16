@@ -227,7 +227,6 @@ class CrossValidation(object):
                                                                         startdate         = datetime.datetime.strftime(datevector[0],'%d/%m/%Y'),
                                                                         enddate           = datetime.datetime.strftime(datevector[-1],'%d/%m/%Y'),
                                                                         shiftdays         = shiftdays,
-                                                                        clean_measurename = True,
                                                                         mincount          = self.__MinMeasureCount)
                     
                     # additional statistical tests to shuffle data
