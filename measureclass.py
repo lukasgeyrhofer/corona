@@ -283,7 +283,7 @@ class COVID19_measures(object):
 
 
     def CleanUpMeasureName(self, measurename = '', clean_up = True):
-        return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('.','').replace('-',' ').replace('_',' ').replace('(',' ').replace(')',' ').split(' ')])
+        return ''.join([mn.capitalize() for mn in measurename.replace('/','').replace(',','').replace('.','').replace('-',' ').replace('_',' ').replace('(',' ').replace(')',' ').split(' ')]).strip()
 
 
 
