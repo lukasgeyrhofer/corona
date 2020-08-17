@@ -671,7 +671,7 @@ class COVID19_measures(object):
         for ml in range(enforce_measure_level_diff):
             measurenameDF['Measure_L{}'.format(measure_level + ml + 1)] = measurenameDF['Measure_L{}'.format(measure_level)]
 
-        return measurenameDF
+        return measurenameDF.sort_values(by = ['Measure_L{}'.format(i+1) for i in range(measure_level)])
     
     
     
