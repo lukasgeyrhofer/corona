@@ -97,7 +97,7 @@ class COVID19_measures(object):
         self.__resolve_US_states  = kwargs.get('resolve_US_states',    False)
         self.__store_raw_data     = kwargs.get('store_raw_data',       False)
         self.__index_name_level   = kwargs.get('index_name_level',     self.__measurelevel)
-        
+
         self.__max_date_check     = 40 # how many days back from today, used so far only in HIT-COVID, which has upload date in their filenames
         
         self.__datasource         = kwargs.get('datasource','CCCSL').upper()
@@ -498,7 +498,12 @@ class COVID19_measures(object):
         self.__index_name_level = np.min([self.__index_name_level, self.__datasourceinfo[self.__datasource]['MaxMeasureLevel']])
         mheader = ['Measure_L{}'.format(i+1) for i in range(self.__index_name_level)]
         allmeasures = self.__data[mheader].drop_duplicates()
-        allmeasures['indexname'] = self.AddNumberToDuplicates(allmeasures['Measure_L{}'.format(self.__index_name_level)].apply(self.CleanUpMeasureName).values)
+        allmeasures = allmeasures.replace(r'^\s*$', np.nan, regex = True)
+        allmeasures['tmp_L1'] = allmeasures['Measure_L1']
+        for i in range(self.__index_name_level - 1):
+           allmeasures['tmp_L{}'.format(i+2)] = allmeasures['Measure_L{}'.format(i+2)].fillna(allmeasures['tmp_L{}'.format(i+1)])
+        allmeasures['indexname'] = self.AddNumberToDuplicates(allmeasures['tmp_L{}'.format(self.__index_name_level)].apply(self.CleanUpMeasureName).values)
+        allmeasures.drop(columns = ['tmp_L{}'.format(i+1) for i in range(self.__index_name_level)], inplace = True)
         self.__data = self.__data.merge(allmeasures, left_on = mheader, right_on = mheader, how = 'left')
         
     
