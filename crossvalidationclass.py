@@ -555,12 +555,11 @@ class CrossValidation(object):
     
             
 
-    def PlotPrevalenceEffects(self, external_axes = None, filename = 'prevalence_effects.pdf', ylim = (-.3,.1), figsize = (20,6),drop_zeros = False, rescale = False, textlen = 40):
-        prevalence = self.EstimateMeasurePrevalence()
+    def PlotPrevalenceEffects(self, external_axes = None, filename = 'prevalence_effects.pdf', ylim = (-.3,.1), figsize = (20,6),drop_zeros = False, rescale = False, textlen = 40, title = ''):
+        prevalence = self.EstimateMeasurePrevalence().drop(columns = ['Measure_L1','Measure_L2'])
         effects    = self.FinalMeasureEffects(drop_zeros = drop_zeros, rescale = rescale)
 
-        combined = prevalence.merge(effects, how = 'inner',left_on = ['Measure_L1','Measure_L2'], right_on = ['Measure_L1','Measure_L2'])
-        combined.index = prevalence.index
+        combined   = effects.merge(prevalence, how = 'left', left_index = True, right_index = True)
         
         fig, ax, savefig = self.CheckExternalAxes(external_axes,figsize,(1,3))                
 
@@ -577,9 +576,12 @@ class CrossValidation(object):
             ax[i].legend()
             ax[i].set_ylabel('Measure Effect')
 
-        ax[0].set_title('Prevalence All Countries')
-        ax[1].set_title('Prevalence Implementing Countries')
-        ax[2].set_title('Fraction of Implementing Countries')
+        ax[0].set_xlabel('Prevalence All Countries')
+        ax[1].set_xlabel('Prevalence Implementing Countries')
+        ax[2].set_xlabel('Fraction of Implementing Countries')
+        
+        if title != '':
+            ax[0].set_title(title, weight = 'bold')
         
         if savefig:
             fig.tight_layout()
