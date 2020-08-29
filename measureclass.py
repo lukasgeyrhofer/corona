@@ -24,7 +24,7 @@ class COVID19_measures(object):
     * CCCSL
        https://covid19-interventions.com/
        https://github.com/amel-github/covid19-interventionmeasures
-       Desvars-Larrive et al (2020), CC-BY-SA 4.0
+       Desvars-Larrive et al (2020) Scientific Data 7, 285 [https://doi.org/10.1038/s41597-020-00609-9]
     * OXFORD
        https://www.bsg.ox.ac.uk/research/research-projects/coronavirus-government-response-tracker
        Hale, Webster, Petherick, Phillips, Kira (2020), CC-BY-SA 4.0
@@ -42,7 +42,7 @@ class COVID19_measures(object):
     * HIT-COVID
        https://akuko.io/post/covid-intervention-tracking
        https://github.com/HopkinsIDD/hit-covid
-
+       Zheng et al (2020), Scientific Data 7, 286 [https://doi.org/10.1038/s41597-020-00610-2]
        
     main usage:
     ( with default options )
