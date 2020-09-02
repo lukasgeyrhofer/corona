@@ -496,7 +496,8 @@ class CrossValidation(object):
         measures = measures.merge(prevalence_allcountries, how = 'right', right_index = True, left_index = True)
         measures = measures.merge(prevalence_implementingcountries, how = 'right', right_index = True, left_index = True)
         
-        measures['Fraction of Implementating Countries'] = measures['Countries with Implementation']/len(self.RegressionDF(shiftdays)['Country'].unique())
+        measures['Fraction of Implementating Countries'] = regrDF.drop(dropcolumns, axis = 'columns').groupby('Country').apply(lambda grp:(grp.sum()>0).astype(int)).sum()/len(regrDF['Country'].unique())
+        
         
         return measures
     
