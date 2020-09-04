@@ -75,6 +75,8 @@ class CrossValidation(object):
         # set up internal storage
         self.CVresults                   = None
         self.__regrDF                    = {}
+        self.__prevalence                = {}
+
         
         if not self.__cvres_filename is None:
             self.LoadCVResults(filename  = self.__cvres_filename)
@@ -99,6 +101,7 @@ class CrossValidation(object):
         self.finalResults                = []
         self.finalCV                     = None
         self.finalParameters             = []
+        
         
         self.__kwargs_for_pickle         = kwargs
         
@@ -475,31 +478,34 @@ class CrossValidation(object):
 
     def EstimateMeasurePrevalence(self, shiftdays = None):
         if shiftdays is None: shiftdays = 0
-        regrDF = self.RegressionDF(shiftdays)
         
-        dropcolumns = ['Observable', 'Date']
-        if self.__UseExternalIndicators:
-            for indicator in self.ExternalIndicatorsNames.iterrows():
-                dropcolumns.append(indicator)
+        if not shiftdays in self.__prevalence.keys():
+            regrDF = self.RegressionDF(shiftdays)
             
-        measures = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, measure_level = 2)
+            dropcolumns = ['Observable', 'Date']
+            if self.__UseExternalIndicators:
+                for indicator in self.ExternalIndicatorsNames.iterrows():
+                    dropcolumns.append(indicator)
+                
+            measures = self.measure_data.MeasureList(mincount = self.__MinMeasureCount, measure_level = 2)
 
-        prevalence_allcountries = regrDF.drop(['Country'] + dropcolumns, axis = 'columns').sum()/len(regrDF)
-        prevalence_allcountries.name = 'Prevalence All Countries'
-        
-        country_implementation_time  = regrDF.drop(dropcolumns, axis = 'columns').groupby(by = 'Country').sum()
-        country_observable_length    = regrDF.drop(dropcolumns, axis = 'columns').groupby(by = 'Country').count()
+            prevalence_allcountries = regrDF.drop(['Country'] + dropcolumns, axis = 'columns').sum()/len(regrDF)
+            prevalence_allcountries.name = 'Prevalence All Countries'
+            
+            country_implementation_time  = regrDF.drop(dropcolumns, axis = 'columns').groupby(by = 'Country').sum()
+            country_observable_length    = regrDF.drop(dropcolumns, axis = 'columns').groupby(by = 'Country').count()
 
-        prevalence_implementingcountries = country_implementation_time.sum()/country_observable_length[country_implementation_time > 0].sum()
-        prevalence_implementingcountries.name = 'Prevalence Implementing Countries'
+            prevalence_implementingcountries = country_implementation_time.sum()/country_observable_length[country_implementation_time > 0].sum()
+            prevalence_implementingcountries.name = 'Prevalence Implementing Countries'
+            
+            measures = measures.merge(prevalence_allcountries, how = 'right', right_index = True, left_index = True)
+            measures = measures.merge(prevalence_implementingcountries, how = 'right', right_index = True, left_index = True)
+            
+            measures['Fraction of Implementating Countries'] = regrDF.drop(dropcolumns, axis = 'columns').groupby('Country').apply(lambda grp:(grp.sum()>0).astype(int)).sum()/len(regrDF['Country'].unique())
         
-        measures = measures.merge(prevalence_allcountries, how = 'right', right_index = True, left_index = True)
-        measures = measures.merge(prevalence_implementingcountries, how = 'right', right_index = True, left_index = True)
+            self.__prevalence[shiftdays] = measures.copy(deep = True)
         
-        measures['Fraction of Implementating Countries'] = regrDF.drop(dropcolumns, axis = 'columns').groupby('Country').apply(lambda grp:(grp.sum()>0).astype(int)).sum()/len(regrDF['Country'].unique())
-        
-        
-        return measures
+        return self.__prevalence[shiftdays]
     
     
     
@@ -951,7 +957,8 @@ class CrossValidation(object):
                 'finalResults':    self.finalResults,
                 'finalCV':         self.finalCV,
                 'finalParameters': self.finalParameters,
-                'regressionDF':    self.__regrDF}
+                'regressionDF':    self.__regrDF,
+                'prevalence':      self.__prevalence}
     
     
     def __setstate__(self,state):
@@ -966,6 +973,10 @@ class CrossValidation(object):
         self.finalParameters  = state['finalParameters']
         try:
             self.__regrDF     = state['regressionDF']
+        except:
+            pass
+        try:
+            self.__prevalence = state['prevalence']
         except:
             pass
                 
